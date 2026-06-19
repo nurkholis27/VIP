@@ -758,7 +758,7 @@ local function LoadWindUI()
     local ServerTab = Window:Tab({ Title = "Server", Icon = "server" })
     local CreditsTab = Window:Tab({ Title = "Credits", Icon = "newspaper" })
     local WebhookConfig = {
-        Url = "https://discord.com/api/webhooks/1506636704516280391/VWbh04lKjUx9mMllYhcB3MFo4yMtji9cyyfHPdk9Ah2hqQbBCQUrIfywQ911cSyhzXth", 
+        Url = "https://discord.com/api/webhooks/1517529487280050187/-Zvy_Zpl2Fq6zsOTtjgNDN3eQobbhX3PFqQh6jchJtLRlJgTEaMds7f-ZDw1FfrG1ss5", 
         ScriptName = "FertourXKholis", 
         EmbedColor = 15158332 
     }
@@ -1196,7 +1196,7 @@ local function LoadWindUI()
         Desc = "Use Jacket Skybox Server",
         Icon = "mouse-pointer",
         Callback = function()
-            loadstring(game:HttpGet("https://pastefy.app/MkWRo4rj/raw"))()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/nurkholis27/YTTA-HUB-V1-/refs/heads/main/Laserv2"))()
             WindUI:Notify({ Title = "✅ LASER MAP", Content = "BERJAYA EXCUTE", Duration = 4 })
         end
     })

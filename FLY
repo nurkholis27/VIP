@@ -1,0 +1,472 @@
+--[[ 
+Fly System - Anonymous9x
+Fixed by Fiqqzr7 | https://discord.gg/FfKeHBw
+]]
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+
+-- =====================================================
+-- FLY CONFIG
+-- =====================================================
+local Fly = {
+    Active = false,
+    Speed = 2,
+    Velocity = nil,
+    Gyro = nil,
+    Loop = nil,
+    Noclip = nil
+}
+
+local Keys = {
+    W = false,
+    A = false,
+    S = false,
+    D = false,
+    E = false,
+    Q = false
+}
+
+local TouchControl = {
+    Active = false,
+    X = 0,
+    Y = 0
+}
+
+-- =====================================================
+-- FLY FUNCTIONS
+-- =====================================================
+local function StartFly()
+    if Fly.Active then return end
+    Fly.Active = true
+    
+    -- Create BodyVelocity
+    Fly.Velocity = Instance.new("BodyVelocity")
+    Fly.Velocity.MaxForce = Vector3.new(100000, 100000, 100000)
+    Fly.Velocity.Velocity = Vector3.new(0, 0, 0)
+    Fly.Velocity.Parent = HumanoidRootPart
+    
+    -- Create BodyGyro
+    Fly.Gyro = Instance.new("BodyGyro")
+    Fly.Gyro.MaxTorque = Vector3.new(100000, 100000, 100000)
+    Fly.Gyro.CFrame = HumanoidRootPart.CFrame
+    Fly.Gyro.Parent = HumanoidRootPart
+    
+    Humanoid.PlatformStand = true
+    
+    -- Noclip
+    Fly.Noclip = RunService.Stepped:Connect(function()
+        if not Fly.Active then return end
+        for _, part in ipairs(Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+    end)
+    
+    -- Main loop
+    Fly.Loop = RunService.Heartbeat:Connect(function()
+        if not Fly.Active then return end
+        
+        local cam = workspace.CurrentCamera
+        if not cam then return end
+        
+        local lookVector = cam.CFrame.LookVector
+        local upVector = cam.CFrame.UpVector
+        local rightVector = cam.CFrame.RightVector
+        
+        -- Calculate movement direction
+        local moveX = 0
+        local moveZ = 0
+        
+        if Keys.W then moveZ = moveZ + 1 end
+        if Keys.S then moveZ = moveZ - 1 end
+        if Keys.A then moveX = moveX - 1 end
+        if Keys.D then moveX = moveX + 1 end
+        
+        if TouchControl.Active then
+            moveZ = -TouchControl.Y
+            moveX = TouchControl.X
+        end
+        
+        local moveDir = Vector3.new(0, 0, 0)
+        
+        -- Forward/Backward
+        if moveZ ~= 0 then
+            moveDir = moveDir + lookVector * moveZ
+        end
+        
+        -- Left/Right
+        if moveX ~= 0 then
+            moveDir = moveDir + rightVector * moveX
+        end
+        
+        -- Up/Down
+        if Keys.E then
+            moveDir = moveDir + Vector3.new(0, 1, 0)
+        end
+        if Keys.Q then
+            moveDir = moveDir + Vector3.new(0, -1, 0)
+        end
+        
+        -- Normalize and apply speed
+        if moveDir.Magnitude > 0 then
+            moveDir = moveDir.Unit * Fly.Speed * 100
+        end
+        
+        Fly.Velocity.Velocity = moveDir
+        
+        -- Face movement direction
+        local flatLook = Vector3.new(lookVector.X, 0, lookVector.Z)
+        if flatLook.Magnitude > 0 then
+            Fly.Gyro.CFrame = CFrame.new(HumanoidRootPart.Position, HumanoidRootPart.Position + flatLook)
+        end
+    end)
+end
+
+local function StopFly()
+    Fly.Active = false
+    
+    if Fly.Loop then
+        Fly.Loop:Disconnect()
+        Fly.Loop = nil
+    end
+    
+    if Fly.Noclip then
+        Fly.Noclip:Disconnect()
+        Fly.Noclip = nil
+    end
+    
+    if Fly.Velocity then
+        Fly.Velocity:Destroy()
+        Fly.Velocity = nil
+    end
+    
+    if Fly.Gyro then
+        Fly.Gyro:Destroy()
+        Fly.Gyro = nil
+    end
+    
+    -- Restore collision
+    for _, part in ipairs(Character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = true
+        end
+    end
+    
+    Humanoid.PlatformStand = false
+    
+    -- Reset keys
+    for key in pairs(Keys) do
+        Keys[key] = false
+    end
+    
+    TouchControl.Active = false
+    TouchControl.X = 0
+    TouchControl.Y = 0
+end
+
+local function ToggleFly()
+    if Fly.Active then
+        StopFly()
+    else
+        StartFly()
+    end
+end
+
+-- =====================================================
+-- KEYBOARD INPUT
+-- =====================================================
+UserInputService.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        local key = input.KeyCode
+        if key == Enum.KeyCode.W then Keys.W = true end
+        if key == Enum.KeyCode.A then Keys.A = true end
+        if key == Enum.KeyCode.S then Keys.S = true end
+        if key == Enum.KeyCode.D then Keys.D = true end
+        if key == Enum.KeyCode.E then Keys.E = true end
+        if key == Enum.KeyCode.Q then Keys.Q = true end
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        local key = input.KeyCode
+        if key == Enum.KeyCode.W then Keys.W = false end
+        if key == Enum.KeyCode.A then Keys.A = false end
+        if key == Enum.KeyCode.S then Keys.S = false end
+        if key == Enum.KeyCode.D then Keys.D = false end
+        if key == Enum.KeyCode.E then Keys.E = false end
+        if key == Enum.KeyCode.Q then Keys.Q = false end
+    end
+end)
+
+-- =====================================================
+-- CREATE UI
+-- =====================================================
+local CoreGui = game:GetService("CoreGui")
+
+-- Remove existing UI
+local existingGui = CoreGui:FindFirstChild("FlyGUI")
+if existingGui then
+    existingGui:Destroy()
+end
+
+-- Create ScreenGui
+local FlyGui = Instance.new("ScreenGui")
+FlyGui.Name = "FlyGUI"
+FlyGui.ResetOnSpawn = false
+FlyGui.Parent = CoreGui
+
+-- Main Frame
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 140, 0, 130)
+MainFrame.Position = UDim2.new(1, -150, 0, 10)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+MainFrame.BackgroundTransparency = 0.1
+MainFrame.BorderSizePixel = 0
+MainFrame.Parent = FlyGui
+
+-- Header
+local Header = Instance.new("Frame")
+Header.Size = UDim2.new(1, 0, 0, 25)
+Header.BackgroundColor3 = Color3.fromRGB(40, 0, 80) -- Changed to dark purple
+Header.Parent = MainFrame
+
+local Title = Instance.new("TextLabel")
+Title.Text = "KholisHub"
+Title.TextColor3 = Color3.fromRGB(150, 100, 255) -- Changed to purple
+Title.Size = UDim2.new(0, 80, 1, 0)
+Title.Position = UDim2.new(0, 5, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 12
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = Header
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Text = "✕"
+CloseBtn.Size = UDim2.new(0, 25, 0, 25)
+CloseBtn.Position = UDim2.new(1, -25, 0, 0)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(100, 50, 200) -- Changed to purple
+CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.TextSize = 16
+CloseBtn.Parent = Header
+
+-- Body
+local Body = Instance.new("Frame")
+Body.Size = UDim2.new(1, 0, 1, -25)
+Body.Position = UDim2.new(0, 0, 0, 25)
+Body.BackgroundTransparency = 1
+Body.Parent = MainFrame
+
+-- Toggle Button
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Text = "ON"
+ToggleBtn.Size = UDim2.new(1, -10, 0, 35)
+ToggleBtn.Position = UDim2.new(0, 5, 0, 5)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleBtn.Font = Enum.Font.GothamBold
+ToggleBtn.TextSize = 12
+ToggleBtn.Parent = Body
+
+-- Speed Control
+local SpeedFrame = Instance.new("Frame")
+SpeedFrame.Size = UDim2.new(1, -10, 0, 25)
+SpeedFrame.Position = UDim2.new(0, 5, 0, 45)
+SpeedFrame.BackgroundTransparency = 1
+SpeedFrame.Parent = Body
+
+local SpeedLabel = Instance.new("TextLabel")
+SpeedLabel.Text = "SPD:"
+SpeedLabel.TextColor3 = Color3.fromRGB(180, 140, 255) -- Changed to light purple
+SpeedLabel.Size = UDim2.new(0, 30, 1, 0)
+SpeedLabel.Position = UDim2.new(0, 0, 0, 0)
+SpeedLabel.BackgroundTransparency = 1
+SpeedLabel.Font = Enum.Font.Gotham
+SpeedLabel.TextSize = 10
+SpeedLabel.TextXAlignment = Enum.TextXAlignment.Left
+SpeedLabel.Parent = SpeedFrame
+
+local SpeedMinus = Instance.new("TextButton")
+SpeedMinus.Text = "-"
+SpeedMinus.Size = UDim2.new(0, 20, 0, 20)
+SpeedMinus.Position = UDim2.new(0, 35, 0.5, -10)
+SpeedMinus.BackgroundColor3 = Color3.fromRGB(80, 50, 120) -- Changed to purple
+SpeedMinus.TextColor3 = Color3.fromRGB(255, 255, 255)
+SpeedMinus.Font = Enum.Font.GothamBold
+SpeedMinus.TextSize = 12
+SpeedMinus.Parent = SpeedFrame
+
+local SpeedValue = Instance.new("TextLabel")
+SpeedValue.Name = "SpeedValue"
+SpeedValue.Text = tostring(Fly.Speed)
+SpeedValue.TextColor3 = Color3.fromRGB(200, 150, 255) -- Changed to light purple
+SpeedValue.Size = UDim2.new(0, 30, 0, 20)
+SpeedValue.Position = UDim2.new(0, 60, 0.5, -10)
+SpeedValue.BackgroundColor3 = Color3.fromRGB(60, 40, 80) -- Changed to dark purple
+SpeedValue.Font = Enum.Font.GothamBold
+SpeedValue.TextSize = 11
+SpeedValue.Parent = SpeedFrame
+
+local SpeedPlus = Instance.new("TextButton")
+SpeedPlus.Text = "+"
+SpeedPlus.Size = UDim2.new(0, 20, 0, 20)
+SpeedPlus.Position = UDim2.new(0, 95, 0.5, -10)
+SpeedPlus.BackgroundColor3 = Color3.fromRGB(80, 50, 120) -- Changed to purple
+SpeedPlus.TextColor3 = Color3.fromRGB(255, 255, 255)
+SpeedPlus.Font = Enum.Font.GothamBold
+SpeedPlus.TextSize = 12
+SpeedPlus.Parent = SpeedFrame
+
+local InfoText = Instance.new("TextLabel")
+InfoText.Text = "Fly with the noclip system"
+InfoText.TextColor3 = Color3.fromRGB(120, 100, 255) -- Changed to purple
+InfoText.Size = UDim2.new(1, -10, 0, 20)
+InfoText.Position = UDim2.new(0, 5, 0, 75)
+InfoText.BackgroundTransparency = 1
+InfoText.Font = Enum.Font.Gotham
+InfoText.TextSize = 9
+InfoText.TextXAlignment = Enum.TextXAlignment.Center
+InfoText.Parent = Body
+
+-- =====================================================
+-- UI FUNCTIONS
+-- =====================================================
+local function UpdateUI()
+    if Fly.Active then
+        ToggleBtn.Text = "ON"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 255) -- Changed to purple
+    else
+        ToggleBtn.Text = "OFF"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+    end
+    SpeedValue.Text = string.format("%.1f", Fly.Speed)
+end
+
+-- =====================================================
+-- UI EVENTS
+-- =====================================================
+ToggleBtn.MouseButton1Click:Connect(function()
+    ToggleFly()
+    UpdateUI()
+end)
+
+SpeedMinus.MouseButton1Click:Connect(function()
+    Fly.Speed = math.max(0.5, Fly.Speed - 0.5)
+    UpdateUI()
+end)
+
+SpeedPlus.MouseButton1Click:Connect(function()
+    Fly.Speed = math.min(10, Fly.Speed + 0.5)
+    UpdateUI()
+end)
+
+CloseBtn.MouseButton1Click:Connect(function()
+    StopFly()
+    FlyGui:Destroy()
+end)
+
+FlyGui.Destroying:Connect(function()
+    StopFly()
+end)
+
+-- =====================================================
+-- TOUCH CONTROLS (Mobile)
+-- =====================================================
+if UserInputService.TouchEnabled then
+    local TouchFrame = Instance.new("Frame")
+    TouchFrame.Size = UDim2.new(0, 120, 0, 120)
+    TouchFrame.Position = UDim2.new(0, 30, 1, -150)
+    TouchFrame.BackgroundColor3 = Color3.fromRGB(60, 40, 80) -- Changed to dark purple
+    TouchFrame.BackgroundTransparency = 0.3
+    TouchFrame.BorderSizePixel = 0
+    TouchFrame.Parent = FlyGui
+    
+    local TouchCorner = Instance.new("UICorner")
+    TouchCorner.CornerRadius = UDim.new(1, 0)
+    TouchCorner.Parent = TouchFrame
+    
+    local TouchInner = Instance.new("Frame")
+    TouchInner.Size = UDim2.new(0, 50, 0, 50)
+    TouchInner.Position = UDim2.new(0.5, -25, 0.5, -25)
+    TouchInner.BackgroundColor3 = Color3.fromRGB(150, 50, 255) -- Changed to purple
+    TouchInner.BackgroundTransparency = 0.2
+    TouchInner.BorderSizePixel = 0
+    TouchInner.Parent = TouchFrame
+    
+    local TouchInnerCorner = Instance.new("UICorner")
+    TouchInnerCorner.CornerRadius = UDim.new(1, 0)
+    TouchInnerCorner.Parent = TouchInner
+    
+    local TouchConnection = nil
+    
+    TouchFrame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch then
+            TouchControl.Active = true
+            
+            TouchConnection = input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    TouchControl.Active = false
+                    TouchControl.X = 0
+                    TouchControl.Y = 0
+                    TouchInner.Position = UDim2.new(0.5, -25, 0.5, -25)
+                    if TouchConnection then
+                        TouchConnection:Disconnect()
+                        TouchConnection = nil
+                    end
+                else
+                    local pos = TouchFrame.AbsolutePosition
+                    local size = TouchFrame.AbsoluteSize
+                    local touchPos = input.Position
+                    
+                    local x = (touchPos.X - pos.X) / size.X * 2 - 1
+                    local y = (touchPos.Y - pos.Y) / size.Y * 2 - 1
+                    
+                    local magnitude = math.sqrt(x * x + y * y)
+                    if magnitude > 1 then
+                        x = x / magnitude
+                        y = y / magnitude
+                    end
+                    
+                    if math.abs(x) < 0.15 then x = 0 end
+                    if math.abs(y) < 0.15 then y = 0 end
+                    
+                    TouchControl.X = x
+                    TouchControl.Y = y
+                    TouchInner.Position = UDim2.new(0.5 + x * 0.4, -25, 0.5 + y * 0.4, -25)
+                end
+            end)
+        end
+    end)
+end
+
+-- =====================================================
+-- CHARACTER RESPAWN
+-- =====================================================
+LocalPlayer.CharacterAdded:Connect(function(char)
+    Character = char
+    task.wait(0.5)
+    Humanoid = Character:WaitForChild("Humanoid")
+    HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+    
+    if Fly.Active then
+        StopFly()
+        task.wait(0.1)
+        StartFly()
+    end
+end)
+
+-- =====================================================
+-- INIT
+-- =====================================================
+UpdateUI()
+print("[Fly System] Loaded successfully!")
+print("[Fly System] Press Toggle button or use keys WASD + E/Q")

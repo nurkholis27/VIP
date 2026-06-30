@@ -1,0 +1,494 @@
+-- ================================================
+-- KHOLIS SPAM REMOTE v3.0 (BRUTAL ENGINE)
+-- FITUR: DUAL HEARTBEAT + PARALLEL + ADAPTIVE SPEED
+-- UI: SIMPEL & ELEGAN — MINIMALIS DARK THEME
+-- ================================================
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+-- ================================================
+-- KONFIGURASI WARNA SIMPEL
+-- ================================================
+local Config = {
+    SpeedMultiplier = 60,
+    MaxMultiplier = 150,
+    MinMultiplier = 50,
+    Theme = {
+        Bg = Color3.fromRGB(10, 10, 14),
+        Panel = Color3.fromRGB(16, 16, 22),
+        PanelLight = Color3.fromRGB(22, 22, 30),
+        Text = Color3.fromRGB(245, 245, 255),
+        TextDim = Color3.fromRGB(140, 145, 165),
+        Stroke = Color3.fromRGB(60, 180, 255),
+        Green = Color3.fromRGB(0, 255, 120),
+        Red = Color3.fromRGB(255, 60, 80),
+        Orange = Color3.fromRGB(255, 180, 50),
+        Gray = Color3.fromRGB(100, 105, 120)
+    }
+}
+
+-- STATE
+local Brutal = {
+    Remotes = {},
+    Spamming = false,
+    Fired = 0,
+    Target = 1000,
+    Connections = {},
+    GUI = nil,
+    Performance = {
+        LastTick = 0,
+        CurrentRPS = 0,
+        Multiplier = 60,
+        PeakRPS = 0
+    }
+}
+
+-- ================================================
+-- UI UTILITIES
+-- ================================================
+local function CreateCorner(obj, radius)
+    local c = Instance.new("UICorner", obj)
+    c.CornerRadius = UDim.new(0, radius or 8)
+    return c
+end
+
+local function CreateStroke(obj, color, thickness)
+    local s = Instance.new("UIStroke", obj)
+    s.Color = color or Config.Theme.Stroke
+    s.Thickness = thickness or 1.5
+    s.Transparency = 0.5
+    s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    return s
+end
+
+local function MakeDraggable(frame)
+    local dragging, dragStart, startPos
+    frame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
+        end
+    end)
+    frame.InputChanged:Connect(function(input)
+        if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and dragging then
+            local delta = input.Position - dragStart
+            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+end
+
+-- ================================================
+-- SCANNER
+-- ================================================
+function Brutal.Scan()
+    Brutal.Remotes = {}
+    local function deepScan(folder)
+        for _, v in pairs(folder:GetDescendants()) do
+            if v:IsA("RemoteEvent") then
+                table.insert(Brutal.Remotes, {Obj = v, Path = v:GetFullName(), Active = true})
+            end
+        end
+    end
+    pcall(function() deepScan(game:GetService("ReplicatedStorage")) end)
+    pcall(function() deepScan(workspace) end)
+    return #Brutal.Remotes
+end
+
+-- ================================================
+-- BRUTAL ENGINE
+-- ================================================
+function Brutal.StartAttack()
+    if Brutal.Spamming then return end
+    
+    local Targets = {}
+    for _, r in pairs(Brutal.Remotes) do 
+        if r.Active then 
+            table.insert(Targets, r.Obj) 
+        end 
+    end
+    if #Targets == 0 then return end
+
+    Brutal.Spamming = true
+    Brutal.Fired = 0
+    Brutal.Performance.Multiplier = Config.SpeedMultiplier
+    Brutal.Performance.LastTick = tick()
+    Brutal.Performance.CurrentRPS = 0
+    
+    local function SpamRoutine()
+        if not Brutal.Spamming then return end
+        if Brutal.Fired >= Brutal.Target then
+            Brutal.StopAttack()
+            return
+        end
+        
+        local now = tick()
+        local delta = now - Brutal.Performance.LastTick
+        if delta > 0.05 then
+            Brutal.Performance.CurrentRPS = Brutal.Fired / delta
+            Brutal.Performance.LastTick = now
+            
+            if Brutal.Performance.CurrentRPS > Brutal.Performance.PeakRPS then
+                Brutal.Performance.PeakRPS = Brutal.Performance.CurrentRPS
+            end
+            
+            if Brutal.Performance.CurrentRPS > 7000 then
+                Brutal.Performance.Multiplier = math.min(Brutal.Performance.Multiplier + 3, Config.MaxMultiplier)
+            elseif Brutal.Performance.CurrentRPS < 4000 then
+                Brutal.Performance.Multiplier = math.max(Brutal.Performance.Multiplier - 2, Config.MinMultiplier)
+            end
+        end
+        
+        pcall(function()
+            for pump = 1, 2 do
+                if not Brutal.Spamming or Brutal.Fired >= Brutal.Target then break end
+                
+                for _, remote in pairs(Targets) do
+                    if not Brutal.Spamming then break end
+                    task.spawn(function()
+                        pcall(function() 
+                            remote:FireServer("Kholis_V4", math.random()) 
+                        end)
+                    end)
+                    Brutal.Fired = Brutal.Fired + 1
+                end
+                
+                if pump == 1 then task.wait(0) end
+            end
+            
+            for i = 1, Brutal.Performance.Multiplier do
+                if not Brutal.Spamming or Brutal.Fired >= Brutal.Target then break end
+                
+                for _, remote in pairs(Targets) do
+                    if not Brutal.Spamming then break end
+                    task.spawn(function()
+                        pcall(function()
+                            remote:FireServer("Kholis_V4", math.random())
+                        end)
+                    end)
+                    Brutal.Fired = Brutal.Fired + 1
+                end
+            end
+        end)
+    end
+    
+    local Pulse1 = RunService.Heartbeat:Connect(SpamRoutine)
+    local Pulse2 = RunService.Heartbeat:Connect(SpamRoutine)
+    table.insert(Brutal.Connections, Pulse1)
+    table.insert(Brutal.Connections, Pulse2)
+end
+
+function Brutal.StopAttack()
+    Brutal.Spamming = false
+    for _, c in pairs(Brutal.Connections) do 
+        pcall(function() c:Disconnect() end)
+    end
+    Brutal.Connections = {}
+end
+
+-- ================================================
+-- UI SIMPEL
+-- ================================================
+function Brutal.BuildUI()
+    if CoreGui:FindFirstChild("KholisSpam") then CoreGui.KholisSpam:Destroy() end
+    
+    local Screen = Instance.new("ScreenGui", CoreGui)
+    Screen.Name = "KholisSpam"
+    Screen.ResetOnSpawn = false
+    Brutal.GUI = Screen
+
+    -- ============================================
+    -- MAIN FRAME
+    -- ============================================
+    local Main = Instance.new("Frame", Screen)
+    Main.Size = UDim2.new(0, 380, 0, 320)
+    Main.Position = UDim2.new(0.5, -190, 0.5, -160)
+    Main.BackgroundColor3 = Config.Theme.Bg
+    Main.ClipsDescendants = true
+    CreateCorner(Main, 12)
+    CreateStroke(Main, Config.Theme.Stroke, 1.5)
+    MakeDraggable(Main)
+
+    -- ============================================
+    -- HEADER — JUDUL DIUBAH
+    -- ============================================
+    local Header = Instance.new("Frame", Main)
+    Header.Size = UDim2.new(1, 0, 0, 40)
+    Header.BackgroundColor3 = Config.Theme.Panel
+    Header.BorderSizePixel = 0
+    CreateCorner(Header, 12)
+
+    -- Title — DIUBAH
+    local Title = Instance.new("TextLabel", Header)
+    Title.Size = UDim2.new(1, -80, 1, 0)
+    Title.Position = UDim2.new(0, 12, 0, 0)
+    Title.BackgroundTransparency = 1
+    Title.Text = "⚡ SPAM REMOTE BY KHOLIS"
+    Title.Font = Enum.Font.GothamBold
+    Title.TextSize = 13
+    Title.TextColor3 = Config.Theme.Text
+    Title.TextXAlignment = Enum.TextXAlignment.Left
+
+    -- Close Button
+    local CloseBtn = Instance.new("TextButton", Header)
+    CloseBtn.Size = UDim2.new(0, 26, 0, 26)
+    CloseBtn.Position = UDim2.new(1, -32, 0.5, -13)
+    CloseBtn.BackgroundColor3 = Config.Theme.Red
+    CloseBtn.BackgroundTransparency = 0.8
+    CloseBtn.Text = "✕"
+    CloseBtn.TextColor3 = Config.Theme.Text
+    CloseBtn.TextSize = 13
+    CloseBtn.Font = Enum.Font.GothamBold
+    CloseBtn.BorderSizePixel = 0
+    CreateCorner(CloseBtn, 6)
+
+    CloseBtn.MouseButton1Click:Connect(function() 
+        Brutal.StopAttack() 
+        Screen:Destroy() 
+    end)
+
+    -- Minimize Button
+    local MinBtn = Instance.new("TextButton", Header)
+    MinBtn.Size = UDim2.new(0, 26, 0, 26)
+    MinBtn.Position = UDim2.new(1, -64, 0.5, -13)
+    MinBtn.BackgroundColor3 = Config.Theme.PanelLight
+    MinBtn.Text = "−"
+    MinBtn.TextColor3 = Config.Theme.Text
+    MinBtn.TextSize = 18
+    MinBtn.Font = Enum.Font.GothamBold
+    MinBtn.BorderSizePixel = 0
+    CreateCorner(MinBtn, 6)
+
+    local Expanded = true
+    MinBtn.MouseButton1Click:Connect(function()
+        Expanded = not Expanded
+        if Expanded then
+            Main:TweenSize(UDim2.new(0, 380, 0, 320), "Out", "Quad", 0.3)
+        else
+            Main:TweenSize(UDim2.new(0, 380, 0, 40), "Out", "Quad", 0.3)
+        end
+    end)
+
+    -- ============================================
+    -- CONTENT
+    -- ============================================
+    local Container = Instance.new("Frame", Main)
+    Container.Size = UDim2.new(1, -16, 1, -52)
+    Container.Position = UDim2.new(0, 8, 0, 44)
+    Container.BackgroundTransparency = 1
+
+    -- ============================================
+    -- LEFT PANEL (STATS + BUTTONS)
+    -- ============================================
+    local Left = Instance.new("Frame", Container)
+    Left.Size = UDim2.new(0.35, -4, 1, 0)
+    Left.BackgroundColor3 = Config.Theme.Panel
+    CreateCorner(Left, 8)
+    CreateStroke(Left, Config.Theme.Stroke, 1)
+
+    -- Status
+    local Stats = Instance.new("TextLabel", Left)
+    Stats.Size = UDim2.new(1, -10, 0, 50)
+    Stats.Position = UDim2.new(0, 5, 0, 6)
+    Stats.BackgroundColor3 = Config.Theme.PanelLight
+    Stats.TextColor3 = Config.Theme.Green
+    Stats.Font = Enum.Font.Code
+    Stats.TextSize = 9
+    Stats.TextXAlignment = Enum.TextXAlignment.Left
+    Stats.Text = "STATUS: READY"
+    CreateCorner(Stats, 6)
+
+    -- Target Input
+    local CountBox = Instance.new("TextBox", Left)
+    CountBox.Size = UDim2.new(1, -10, 0, 28)
+    CountBox.Position = UDim2.new(0, 5, 0, 62)
+    CountBox.BackgroundColor3 = Config.Theme.PanelLight
+    CountBox.TextColor3 = Config.Theme.Text
+    CountBox.PlaceholderText = "TARGET"
+    CountBox.Text = "1000"
+    CountBox.Font = Enum.Font.GothamBold
+    CountBox.TextSize = 12
+    CountBox.TextXAlignment = Enum.TextXAlignment.Center
+    CreateCorner(CountBox, 6)
+    
+    CountBox:GetPropertyChangedSignal("Text"):Connect(function()
+        Brutal.Target = tonumber(CountBox.Text) or 1000
+    end)
+
+    -- Scan Button
+    local BtnScan = Instance.new("TextButton", Left)
+    BtnScan.Size = UDim2.new(1, -10, 0, 28)
+    BtnScan.Position = UDim2.new(0, 5, 0, 96)
+    BtnScan.BackgroundColor3 = Config.Theme.PanelLight
+    BtnScan.Text = "SCAN"
+    BtnScan.TextColor3 = Config.Theme.Text
+    BtnScan.Font = Enum.Font.GothamBold
+    BtnScan.TextSize = 11
+    CreateCorner(BtnScan, 6)
+    CreateStroke(BtnScan, Config.Theme.Gray, 1)
+
+    -- Start Button
+    local BtnStart = Instance.new("TextButton", Left)
+    BtnStart.Size = UDim2.new(1, -10, 0, 36)
+    BtnStart.Position = UDim2.new(0, 5, 0, 130)
+    BtnStart.BackgroundColor3 = Config.Theme.Red
+    BtnStart.BackgroundTransparency = 0.2
+    BtnStart.Text = "START"
+    BtnStart.TextColor3 = Config.Theme.Text
+    BtnStart.Font = Enum.Font.GothamBold
+    BtnStart.TextSize = 13
+    CreateCorner(BtnStart, 6)
+    CreateStroke(BtnStart, Config.Theme.Red, 2)
+
+    -- Stop Button
+    local BtnStop = Instance.new("TextButton", Left)
+    BtnStop.Size = UDim2.new(1, -10, 0, 26)
+    BtnStop.Position = UDim2.new(0, 5, 0, 172)
+    BtnStop.BackgroundColor3 = Config.Theme.PanelLight
+    BtnStop.Text = "STOP"
+    BtnStop.TextColor3 = Config.Theme.TextDim
+    BtnStop.Font = Enum.Font.GothamBold
+    BtnStop.TextSize = 11
+    CreateCorner(BtnStop, 6)
+
+    -- Credits — DIUBAH
+    local Credit = Instance.new("TextLabel", Left)
+    Credit.Size = UDim2.new(1, 0, 0, 16)
+    Credit.Position = UDim2.new(0, 0, 1, -18)
+    Credit.BackgroundTransparency = 1
+    Credit.Text = "By Kholis"
+    Credit.TextColor3 = Config.Theme.Gray
+    Credit.Font = Enum.Font.Gotham
+    Credit.TextSize = 8
+    Credit.TextXAlignment = Enum.TextXAlignment.Center
+
+    -- ============================================
+    -- RIGHT PANEL (REMOTE LIST)
+    -- ============================================
+    local Right = Instance.new("Frame", Container)
+    Right.Size = UDim2.new(0.65, 0, 1, 0)
+    Right.Position = UDim2.new(0.35, 4, 0, 0)
+    Right.BackgroundColor3 = Config.Theme.Panel
+    CreateCorner(Right, 8)
+    CreateStroke(Right, Config.Theme.Stroke, 1)
+
+    -- Header
+    local RemoteHeader = Instance.new("TextLabel", Right)
+    RemoteHeader.Size = UDim2.new(1, -10, 0, 22)
+    RemoteHeader.Position = UDim2.new(0, 5, 0, 4)
+    RemoteHeader.BackgroundTransparency = 1
+    RemoteHeader.Text = "REMOTES"
+    RemoteHeader.TextColor3 = Config.Theme.TextDim
+    RemoteHeader.Font = Enum.Font.GothamBold
+    RemoteHeader.TextSize = 9
+    RemoteHeader.TextXAlignment = Enum.TextXAlignment.Left
+
+    -- Badge
+    local Badge = Instance.new("Frame", Right)
+    Badge.Size = UDim2.new(0, 36, 0, 18)
+    Badge.Position = UDim2.new(1, -42, 0, 6)
+    Badge.BackgroundColor3 = Config.Theme.Stroke
+    Badge.BackgroundTransparency = 0.3
+    CreateCorner(Badge, 4)
+
+    local BadgeText = Instance.new("TextLabel", Badge)
+    BadgeText.Size = UDim2.new(1, 0, 1, 0)
+    BadgeText.BackgroundTransparency = 1
+    BadgeText.Text = "0"
+    BadgeText.TextColor3 = Config.Theme.Text
+    BadgeText.Font = Enum.Font.GothamBold
+    BadgeText.TextSize = 10
+    BadgeText.TextXAlignment = Enum.TextXAlignment.Center
+
+    -- Scroll
+    local Scroll = Instance.new("ScrollingFrame", Right)
+    Scroll.Size = UDim2.new(1, -4, 1, -32)
+    Scroll.Position = UDim2.new(0, 2, 0, 28)
+    Scroll.BackgroundTransparency = 1
+    Scroll.ScrollBarThickness = 3
+    Scroll.ScrollBarImageColor3 = Config.Theme.Stroke
+    
+    local Layout = Instance.new("UIListLayout", Scroll)
+    Layout.Padding = UDim.new(0, 2)
+
+    -- ============================================
+    -- SCAN LOGIC
+    -- ============================================
+    BtnScan.MouseButton1Click:Connect(function()
+        local c = Brutal.Scan()
+        BadgeText.Text = c
+        BtnScan.Text = "SCAN (" .. c .. ")"
+        
+        for _, v in pairs(Scroll:GetChildren()) do 
+            if v:IsA("TextButton") then v:Destroy() end 
+        end
+        
+        for _, rem in pairs(Brutal.Remotes) do
+            local item = Instance.new("TextButton", Scroll)
+            item.Size = UDim2.new(1, 0, 0, 18)
+            item.BackgroundTransparency = 1
+            item.Text = "  " .. rem.Path
+            item.TextColor3 = Config.Theme.Green 
+            item.Font = Enum.Font.Code
+            item.TextSize = 8
+            item.TextXAlignment = Enum.TextXAlignment.Left
+            item.TextTruncate = Enum.TextTruncate.AtEnd
+            
+            -- Dot
+            local Dot = Instance.new("Frame", item)
+            Dot.Size = UDim2.new(0, 4, 0, 4)
+            Dot.Position = UDim2.new(0, 4, 0.5, -2)
+            Dot.BackgroundColor3 = Config.Theme.Green
+            Dot.BorderSizePixel = 0
+            CreateCorner(Dot, 2)
+            
+            item.MouseButton1Click:Connect(function()
+                rem.Active = not rem.Active
+                local color = rem.Active and Config.Theme.Green or Config.Theme.Gray
+                item.TextColor3 = color
+                Dot.BackgroundColor3 = color
+            end)
+        end
+        Scroll.CanvasSize = UDim2.new(0,0,0, #Brutal.Remotes * 20)
+    end)
+
+    -- ============================================
+    -- BUTTON CONNECTIONS
+    -- ============================================
+    BtnStart.MouseButton1Click:Connect(Brutal.StartAttack)
+    BtnStop.MouseButton1Click:Connect(Brutal.StopAttack)
+
+    -- ============================================
+    -- UI UPDATE
+    -- ============================================
+    task.spawn(function()
+        while Brutal.GUI do
+            if Brutal.Spamming then
+                Stats.Text = string.format(
+                    "FIRE: %d/%d\nRPS: %.0f | PEAK: %.0f", 
+                    Brutal.Fired, 
+                    Brutal.Target, 
+                    Brutal.Performance.CurrentRPS or 0,
+                    Brutal.Performance.PeakRPS or 0
+                )
+            else
+                Stats.Text = "STATUS: READY\nWAITING..."
+            end
+            task.wait(0.1)
+        end
+    end)
+    
+    print(">> SPAM REMOTE BY KHOLIS LOADED")
+end
+
+-- ================================================
+-- START
+-- ================================================
+Brutal.BuildUI()

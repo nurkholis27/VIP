@@ -1,0 +1,299 @@
+-- ================================================
+-- KHOLIS HYBRID V1 (COMPACT & LETHAL)
+-- THEME: SIMPEL BIRU MUDA
+-- STATUS: STEALTH BYPASS ACTIVE
+-- ================================================
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+
+_G.KHOLIS_ACTIVE = false 
+
+local KHOLIS = {
+    Stats = { Fires = 0, Hijacks = 0 },
+    Config = {
+        BurstSize = 25, 
+        HijackText = "KHOLIS HEHE",
+    }
+}
+
+-- ================================================
+-- WARNA BIRU MUDA
+-- ================================================
+local COLORS = {
+    Bg = Color3.fromRGB(6, 12, 24),
+    Panel = Color3.fromRGB(12, 20, 40),
+    Surface = Color3.fromRGB(18, 28, 50),
+    Text = Color3.fromRGB(245, 245, 255),
+    TextDim = Color3.fromRGB(150, 180, 220),
+    Blue = Color3.fromRGB(60, 180, 255),
+    BlueLight = Color3.fromRGB(100, 200, 255),
+    BlueDark = Color3.fromRGB(30, 80, 150),
+    White = Color3.fromRGB(255, 255, 255),
+    Gray = Color3.fromRGB(100, 120, 150),
+    Red = Color3.fromRGB(255, 60, 80),
+    Green = Color3.fromRGB(0, 255, 150)
+}
+
+-- ================================================
+-- UI HELPERS
+-- ================================================
+local function MakeCorner(obj, radius)
+    local c = Instance.new("UICorner", obj)
+    c.CornerRadius = UDim.new(0, radius or 8)
+    return c
+end
+
+local function MakeStroke(obj, color, thickness)
+    local s = Instance.new("UIStroke", obj)
+    s.Color = color or COLORS.Blue
+    s.Thickness = thickness or 1.5
+    s.Transparency = 0.4
+    s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    return s
+end
+
+local function MakeDraggable(frame)
+    local dragging, dragStart, startPos
+    frame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
+        end
+    end)
+    frame.InputChanged:Connect(function(input)
+        if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and dragging then
+            local delta = input.Position - dragStart
+            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+end
+
+-- ================================================
+-- ENGINE (SAMA PERSIS)
+-- ================================================
+local function LaunchEngine()
+    task.spawn(function()
+        while _G.KHOLIS_ACTIVE do
+            for _, v in pairs(workspace:GetDescendants()) do
+                pcall(function()
+                    if (v:IsA("TextLabel") or v:IsA("TextBox")) and v.Text ~= KHOLIS.Config.HijackText then
+                        v.Text = KHOLIS.Config.HijackText
+                        v.TextColor3 = COLORS.Blue
+                        KHOLIS.Stats.Hijacks = KHOLIS.Stats.Hijacks + 1
+                    end
+                end)
+            end
+            task.wait(5)
+        end
+    end)
+
+    task.spawn(function()
+        local remotes = {}
+        for _, v in pairs(game:GetDescendants()) do
+            if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then table.insert(remotes, v) end
+        end
+        while _G.KHOLIS_ACTIVE do
+            RunService.Heartbeat:Wait()
+            for i = 1, KHOLIS.Config.BurstSize do
+                if not _G.KHOLIS_ACTIVE then break end
+                local r = remotes[math.random(1, #remotes)]
+                if r then
+                    task.spawn(function() pcall(function() r:FireServer(tick(), math.random(1, 999)) end) end)
+                    KHOLIS.Stats.Fires = KHOLIS.Stats.Fires + 1
+                end
+            end
+        end
+    end)
+end
+
+-- ================================================
+-- UI — SIMPEL BIRU MUDA
+-- ================================================
+local function BuildUI()
+    if CoreGui:FindFirstChild("KholisHybrid") then CoreGui.KholisHybrid:Destroy() end
+    
+    local Screen = Instance.new("ScreenGui", CoreGui)
+    Screen.Name = "KholisHybrid"
+    Screen.ResetOnSpawn = false
+
+    -- ============================================
+    -- MAIN FRAME
+    -- ============================================
+    local Main = Instance.new("Frame", Screen)
+    Main.Size = UDim2.new(0, 280, 0, 230)
+    Main.Position = UDim2.new(0.5, -140, 0.5, -115)
+    Main.BackgroundColor3 = COLORS.Bg
+    Main.BorderSizePixel = 0
+    Main.Active = true
+    Main.Draggable = true
+    Main.ClipsDescendants = true
+    MakeCorner(Main, 10)
+    MakeStroke(Main, COLORS.Blue, 2)
+    MakeDraggable(Main)
+
+    -- ============================================
+    -- HEADER — JUDUL DIUBAH
+    -- ============================================
+    local Header = Instance.new("Frame", Main)
+    Header.Size = UDim2.new(1, 0, 0, 34)
+    Header.BackgroundColor3 = COLORS.Panel
+    Header.BorderSizePixel = 0
+    MakeCorner(Header, 10)
+
+    -- Title — DIUBAH
+    local Title = Instance.new("TextLabel", Header)
+    Title.Size = UDim2.new(1, -70, 1, 0)
+    Title.Position = UDim2.new(0, 10, 0, 0)
+    Title.BackgroundTransparency = 1
+    Title.Text = "HYBRID BY KHOLIS"
+    Title.Font = Enum.Font.GothamBold
+    Title.TextSize = 12
+    Title.TextColor3 = COLORS.BlueLight
+    Title.TextXAlignment = Enum.TextXAlignment.Left
+
+    -- Close Button
+    local CloseBtn = Instance.new("TextButton", Header)
+    CloseBtn.Size = UDim2.new(0, 24, 0, 24)
+    CloseBtn.Position = UDim2.new(1, -30, 0.5, -12)
+    CloseBtn.BackgroundColor3 = COLORS.Red
+    CloseBtn.BackgroundTransparency = 0.2
+    CloseBtn.Text = "✕"
+    CloseBtn.TextColor3 = COLORS.White
+    CloseBtn.TextSize = 12
+    CloseBtn.Font = Enum.Font.GothamBold
+    CloseBtn.BorderSizePixel = 0
+    MakeCorner(CloseBtn, 6)
+
+    CloseBtn.MouseButton1Click:Connect(function() 
+        _G.KHOLIS_ACTIVE = false 
+        Screen:Destroy() 
+    end)
+
+    -- Minimize Button
+    local MinBtn = Instance.new("TextButton", Header)
+    MinBtn.Size = UDim2.new(0, 24, 0, 24)
+    MinBtn.Position = UDim2.new(1, -58, 0.5, -12)
+    MinBtn.BackgroundColor3 = COLORS.Surface
+    MinBtn.Text = "−"
+    MinBtn.TextColor3 = COLORS.White
+    MinBtn.TextSize = 16
+    MinBtn.Font = Enum.Font.GothamBold
+    MinBtn.BorderSizePixel = 0
+    MakeCorner(MinBtn, 6)
+
+    local Expanded = true
+    MinBtn.MouseButton1Click:Connect(function()
+        Expanded = not Expanded
+        Main:TweenSize(Expanded and UDim2.new(0, 280, 0, 230) or UDim2.new(0, 280, 0, 34), "Out", "Quad", 0.3)
+    end)
+
+    -- ============================================
+    -- CONTENT
+    -- ============================================
+    local Content = Instance.new("Frame", Main)
+    Content.Size = UDim2.new(1, 0, 1, -34)
+    Content.Position = UDim2.new(0, 0, 0, 34)
+    Content.BackgroundTransparency = 1
+
+    -- Status Display
+    local StatusFrame = Instance.new("Frame", Content)
+    StatusFrame.Size = UDim2.new(1, -16, 0, 56)
+    StatusFrame.Position = UDim2.new(0, 8, 0, 8)
+    StatusFrame.BackgroundColor3 = COLORS.Panel
+    MakeCorner(StatusFrame, 6)
+    MakeStroke(StatusFrame, COLORS.Blue, 1)
+
+    local StatsTxt = Instance.new("TextLabel", StatusFrame)
+    StatsTxt.Size = UDim2.new(1, -10, 1, 0)
+    StatsTxt.Position = UDim2.new(0, 5, 0, 0)
+    StatsTxt.BackgroundTransparency = 1
+    StatsTxt.Text = "STATUS: IDLE"
+    StatsTxt.TextColor3 = COLORS.TextDim
+    StatsTxt.Font = Enum.Font.Code
+    StatsTxt.TextSize = 10
+    StatsTxt.TextXAlignment = Enum.TextXAlignment.Left
+
+    -- Buttons
+    local StartBtn = Instance.new("TextButton", Content)
+    StartBtn.Size = UDim2.new(1, -16, 0, 36)
+    StartBtn.Position = UDim2.new(0, 8, 0, 72)
+    StartBtn.BackgroundColor3 = COLORS.Blue
+    StartBtn.Text = "▶ START"
+    StartBtn.TextColor3 = COLORS.White
+    StartBtn.Font = Enum.Font.GothamBold
+    StartBtn.TextSize = 13
+    MakeCorner(StartBtn, 6)
+
+    local StopBtn = Instance.new("TextButton", Content)
+    StopBtn.Size = UDim2.new(1, -16, 0, 32)
+    StopBtn.Position = UDim2.new(0, 8, 0, 114)
+    StopBtn.BackgroundColor3 = COLORS.Surface
+    StopBtn.Text = "⏹ STOP"
+    StopBtn.TextColor3 = COLORS.TextDim
+    StopBtn.Font = Enum.Font.GothamBold
+    StopBtn.TextSize = 12
+    MakeCorner(StopBtn, 6)
+
+    -- ============================================
+    -- CREDIT — DIUBAH
+    -- ============================================
+    local Credit = Instance.new("TextLabel", Content)
+    Credit.Size = UDim2.new(1, 0, 0, 16)
+    Credit.Position = UDim2.new(0, 0, 1, -18)
+    Credit.BackgroundTransparency = 1
+    Credit.Text = "By Kholis"
+    Credit.TextColor3 = COLORS.Gray
+    Credit.Font = Enum.Font.Gotham
+    Credit.TextSize = 8
+    Credit.TextXAlignment = Enum.TextXAlignment.Center
+
+    -- ============================================
+    -- BUTTON FUNCTIONS
+    -- ============================================
+    StartBtn.MouseButton1Click:Connect(function()
+        if not _G.KHOLIS_ACTIVE then
+            _G.KHOLIS_ACTIVE = true
+            StartBtn.Text = "⚡ RUNNING..."
+            StartBtn.BackgroundColor3 = COLORS.Green
+            LaunchEngine()
+        end
+    end)
+
+    StopBtn.MouseButton1Click:Connect(function()
+        _G.KHOLIS_ACTIVE = false
+        StartBtn.Text = "▶ START"
+        StartBtn.BackgroundColor3 = COLORS.Blue
+    end)
+
+    -- ============================================
+    -- UI UPDATE LOOP
+    -- ============================================
+    task.spawn(function()
+        while task.wait(0.2) and Main.Parent do
+            if _G.KHOLIS_ACTIVE then
+                StatsTxt.Text = string.format(
+                    "🔥 FIRES: %d\n📡 HIJACKED: %d\n⚡ STATUS: RUNNING", 
+                    KHOLIS.Stats.Fires, 
+                    KHOLIS.Stats.Hijacks
+                )
+                StatsTxt.TextColor3 = COLORS.Green
+            else
+                StatsTxt.Text = "⏸ STATUS: IDLE\n📡 WAITING..."
+                StatsTxt.TextColor3 = COLORS.TextDim
+            end
+        end
+    end)
+    
+    print(">> KHOLIS HYBRID LOADED")
+end
+
+-- ================================================
+-- START
+-- ================================================
+BuildUI()

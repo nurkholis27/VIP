@@ -1,0 +1,490 @@
+-- ================================================
+-- SPEED WALK BY KHOLIS v1.2
+-- Owner: Mr. Kholis
+-- Fitur: Speed Walk + GUI ON/OFF + Plus/Minus + Input Angka
+-- ================================================
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- ================================================
+-- STATE
+-- ================================================
+local SpeedWalk = {
+    Enabled = false,
+    Speed = 50,
+    OriginalSpeed = 16,
+    MinSpeed = 10,
+    MaxSpeed = 200,
+    Step = 5,
+    Connection = nil,
+    GUI = nil
+}
+
+-- ================================================
+-- WARNA BIRU MUDA
+-- ================================================
+local COLORS = {
+    Bg = Color3.fromRGB(6, 12, 24),
+    Panel = Color3.fromRGB(12, 20, 40),
+    Surface = Color3.fromRGB(18, 28, 50),
+    SurfaceHover = Color3.fromRGB(28, 40, 70),
+    Text = Color3.fromRGB(245, 245, 255),
+    TextDim = Color3.fromRGB(150, 180, 220),
+    Blue = Color3.fromRGB(60, 180, 255),
+    BlueLight = Color3.fromRGB(100, 200, 255),
+    BlueDark = Color3.fromRGB(30, 80, 150),
+    White = Color3.fromRGB(255, 255, 255),
+    Gray = Color3.fromRGB(100, 120, 150),
+    Green = Color3.fromRGB(0, 255, 150),
+    Red = Color3.fromRGB(255, 60, 80),
+    Orange = Color3.fromRGB(255, 180, 50)
+}
+
+-- ================================================
+-- UI HELPERS
+-- ================================================
+local function MakeCorner(obj, radius)
+    local c = Instance.new("UICorner", obj)
+    c.CornerRadius = UDim.new(0, radius or 8)
+    return c
+end
+
+local function MakeStroke(obj, color, thickness)
+    local s = Instance.new("UIStroke", obj)
+    s.Color = color or COLORS.Blue
+    s.Thickness = thickness or 1.5
+    s.Transparency = 0.4
+    s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    return s
+end
+
+local function MakeDraggable(frame)
+    local dragging, dragStart, startPos
+    frame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
+        end
+    end)
+    frame.InputChanged:Connect(function(input)
+        if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and dragging then
+            local delta = input.Position - dragStart
+            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+end
+
+-- ================================================
+-- SPEED WALK ENGINE
+-- ================================================
+local function EnableSpeedWalk()
+    if SpeedWalk.Enabled then return end
+    
+    local character = LocalPlayer.Character
+    if not character then return end
+    
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+    
+    SpeedWalk.OriginalSpeed = humanoid.WalkSpeed
+    humanoid.WalkSpeed = SpeedWalk.Speed
+    
+    SpeedWalk.Enabled = true
+    
+    UpdateUI()
+    print("[SPEED] Enabled | Speed: " .. SpeedWalk.Speed)
+end
+
+local function DisableSpeedWalk()
+    if not SpeedWalk.Enabled then return end
+    
+    SpeedWalk.Enabled = false
+    
+    local character = LocalPlayer.Character
+    if character then
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.WalkSpeed = SpeedWalk.OriginalSpeed
+        end
+    end
+    
+    UpdateUI()
+    print("[SPEED] Disabled")
+end
+
+local function ToggleSpeedWalk()
+    if SpeedWalk.Enabled then
+        DisableSpeedWalk()
+    else
+        EnableSpeedWalk()
+    end
+end
+
+local function ApplySpeed()
+    if SpeedWalk.Enabled then
+        local character = LocalPlayer.Character
+        if character then
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid.WalkSpeed = SpeedWalk.Speed
+            end
+        end
+    end
+end
+
+local function SetSpeed(value)
+    local newSpeed = math.floor(math.clamp(value, SpeedWalk.MinSpeed, SpeedWalk.MaxSpeed))
+    SpeedWalk.Speed = newSpeed
+    UpdateUI()
+    ApplySpeed()
+    print("[SPEED] Set to: " .. SpeedWalk.Speed)
+end
+
+local function IncreaseSpeed()
+    SetSpeed(SpeedWalk.Speed + SpeedWalk.Step)
+end
+
+local function DecreaseSpeed()
+    SetSpeed(SpeedWalk.Speed - SpeedWalk.Step)
+end
+
+-- ================================================
+-- RESPAWN HANDLER
+-- ================================================
+LocalPlayer.CharacterAdded:Connect(function(newChar)
+    if SpeedWalk.Enabled then
+        task.wait(0.5)
+        local humanoid = newChar:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.WalkSpeed = SpeedWalk.Speed
+        end
+        print("[SPEED] Reapplied on respawn")
+    end
+end)
+
+-- ================================================
+-- UI REFERENCES
+-- ================================================
+local UI = {
+    SpeedDisplay = nil,
+    SpeedInput = nil,
+    StatusTxt = nil,
+    ToggleBtn = nil,
+    MinusBtn = nil,
+    PlusBtn = nil
+}
+
+local function UpdateUI()
+    if UI.SpeedDisplay then
+        UI.SpeedDisplay.Text = SpeedWalk.Speed
+    end
+    
+    if UI.SpeedInput then
+        UI.SpeedInput.Text = SpeedWalk.Speed
+    end
+    
+    if UI.StatusTxt then
+        local status = SpeedWalk.Enabled and "ON" or "OFF"
+        UI.StatusTxt.Text = "STATUS: " .. status .. "  |  SPEED: " .. SpeedWalk.Speed
+        UI.StatusTxt.TextColor3 = SpeedWalk.Enabled and COLORS.Green or COLORS.TextDim
+    end
+    
+    if UI.ToggleBtn then
+        if SpeedWalk.Enabled then
+            UI.ToggleBtn.Text = "🔒 DISABLE"
+            UI.ToggleBtn.BackgroundColor3 = COLORS.Green
+        else
+            UI.ToggleBtn.Text = "🔓 ENABLE"
+            UI.ToggleBtn.BackgroundColor3 = COLORS.Blue
+        end
+    end
+end
+
+-- ================================================
+-- BUILD UI
+-- ================================================
+local function BuildUI()
+    if CoreGui:FindFirstChild("SpeedWalkUI") then CoreGui.SpeedWalkUI:Destroy() end
+    
+    local Screen = Instance.new("ScreenGui", CoreGui)
+    Screen.Name = "SpeedWalkUI"
+    Screen.ResetOnSpawn = false
+    
+    -- ============================================
+    -- MAIN FRAME
+    -- ============================================
+    local Main = Instance.new("Frame", Screen)
+    Main.Size = UDim2.new(0, 240, 0, 250)
+    Main.Position = UDim2.new(0.5, -120, 0.5, -125)
+    Main.BackgroundColor3 = COLORS.Bg
+    Main.BorderSizePixel = 0
+    Main.Active = true
+    Main.Draggable = true
+    Main.ClipsDescendants = true
+    MakeCorner(Main, 12)
+    MakeStroke(Main, COLORS.Blue, 2)
+    MakeDraggable(Main)
+
+    -- ============================================
+    -- HEADER
+    -- ============================================
+    local Header = Instance.new("Frame", Main)
+    Header.Size = UDim2.new(1, 0, 0, 38)
+    Header.BackgroundColor3 = COLORS.Panel
+    Header.BorderSizePixel = 0
+    MakeCorner(Header, 12)
+
+    -- Title
+    local Title = Instance.new("TextLabel", Header)
+    Title.Size = UDim2.new(1, -70, 1, 0)
+    Title.Position = UDim2.new(0, 10, 0, 0)
+    Title.BackgroundTransparency = 1
+    Title.Text = "⚡ SPEED BY KHOLIS"
+    Title.Font = Enum.Font.GothamBold
+    Title.TextSize = 12
+    Title.TextColor3 = COLORS.BlueLight
+    Title.TextXAlignment = Enum.TextXAlignment.Left
+
+    -- Close Button
+    local CloseBtn = Instance.new("TextButton", Header)
+    CloseBtn.Size = UDim2.new(0, 24, 0, 24)
+    CloseBtn.Position = UDim2.new(1, -30, 0.5, -12)
+    CloseBtn.BackgroundColor3 = COLORS.Red
+    CloseBtn.BackgroundTransparency = 0.2
+    CloseBtn.Text = "✕"
+    CloseBtn.TextColor3 = COLORS.White
+    CloseBtn.TextSize = 12
+    CloseBtn.Font = Enum.Font.GothamBold
+    CloseBtn.BorderSizePixel = 0
+    MakeCorner(CloseBtn, 6)
+
+    CloseBtn.MouseButton1Click:Connect(function() 
+        DisableSpeedWalk()
+        Screen:Destroy() 
+    end)
+
+    -- Minimize Button
+    local MinBtn = Instance.new("TextButton", Header)
+    MinBtn.Size = UDim2.new(0, 24, 0, 24)
+    MinBtn.Position = UDim2.new(1, -58, 0.5, -12)
+    MinBtn.BackgroundColor3 = COLORS.Surface
+    MinBtn.Text = "−"
+    MinBtn.TextColor3 = COLORS.White
+    MinBtn.TextSize = 16
+    MinBtn.Font = Enum.Font.GothamBold
+    MinBtn.BorderSizePixel = 0
+    MakeCorner(MinBtn, 6)
+
+    local Expanded = true
+    MinBtn.MouseButton1Click:Connect(function()
+        Expanded = not Expanded
+        Main:TweenSize(Expanded and UDim2.new(0, 240, 0, 250) or UDim2.new(0, 240, 0, 38), "Out", "Quad", 0.3)
+    end)
+
+    -- ============================================
+    -- CONTENT
+    -- ============================================
+    local Content = Instance.new("Frame", Main)
+    Content.Size = UDim2.new(1, 0, 1, -38)
+    Content.Position = UDim2.new(0, 0, 0, 38)
+    Content.BackgroundTransparency = 1
+
+    -- Status Display
+    local StatusFrame = Instance.new("Frame", Content)
+    StatusFrame.Size = UDim2.new(1, -16, 0, 34)
+    StatusFrame.Position = UDim2.new(0, 8, 0, 8)
+    StatusFrame.BackgroundColor3 = COLORS.Panel
+    MakeCorner(StatusFrame, 6)
+    MakeStroke(StatusFrame, COLORS.Blue, 1)
+
+    local StatusTxt = Instance.new("TextLabel", StatusFrame)
+    StatusTxt.Size = UDim2.new(1, -10, 1, 0)
+    StatusTxt.Position = UDim2.new(0, 5, 0, 0)
+    StatusTxt.BackgroundTransparency = 1
+    StatusTxt.Text = "STATUS: OFF  |  SPEED: 50"
+    StatusTxt.TextColor3 = COLORS.TextDim
+    StatusTxt.Font = Enum.Font.GothamBold
+    StatusTxt.TextSize = 11
+    StatusTxt.TextXAlignment = Enum.TextXAlignment.Center
+    UI.StatusTxt = StatusTxt
+
+    -- Toggle Button
+    local ToggleBtn = Instance.new("TextButton", Content)
+    ToggleBtn.Size = UDim2.new(1, -16, 0, 34)
+    ToggleBtn.Position = UDim2.new(0, 8, 0, 50)
+    ToggleBtn.BackgroundColor3 = COLORS.Blue
+    ToggleBtn.Text = "🔓 ENABLE"
+    ToggleBtn.TextColor3 = COLORS.White
+    ToggleBtn.Font = Enum.Font.GothamBold
+    ToggleBtn.TextSize = 13
+    MakeCorner(ToggleBtn, 6)
+    UI.ToggleBtn = ToggleBtn
+
+    -- ============================================
+    -- SPEED DISPLAY + INPUT
+    -- ============================================
+    local SpeedFrame = Instance.new("Frame", Content)
+    SpeedFrame.Size = UDim2.new(1, -16, 0, 62)
+    SpeedFrame.Position = UDim2.new(0, 8, 0, 92)
+    SpeedFrame.BackgroundColor3 = COLORS.Panel
+    MakeCorner(SpeedFrame, 8)
+    MakeStroke(SpeedFrame, COLORS.Blue, 1)
+
+    -- Label "SPEED"
+    local SpeedLabel = Instance.new("TextLabel", SpeedFrame)
+    SpeedLabel.Size = UDim2.new(1, 0, 0, 16)
+    SpeedLabel.Position = UDim2.new(0, 0, 0, 4)
+    SpeedLabel.BackgroundTransparency = 1
+    SpeedLabel.Text = "SPEED"
+    SpeedLabel.TextColor3 = COLORS.TextDim
+    SpeedLabel.Font = Enum.Font.Gotham
+    SpeedLabel.TextSize = 8
+    SpeedLabel.TextXAlignment = Enum.TextXAlignment.Center
+
+    -- Input Box
+    local SpeedInput = Instance.new("TextBox", SpeedFrame)
+    SpeedInput.Size = UDim2.new(0.5, -4, 0, 30)
+    SpeedInput.Position = UDim2.new(0.25, 0, 0, 24)
+    SpeedInput.BackgroundColor3 = COLORS.Surface
+    SpeedInput.TextColor3 = COLORS.BlueLight
+    SpeedInput.Font = Enum.Font.GothamBold
+    SpeedInput.TextSize = 20
+    SpeedInput.TextXAlignment = Enum.TextXAlignment.Center
+    SpeedInput.Text = "50"
+    SpeedInput.BorderSizePixel = 0
+    MakeCorner(SpeedInput, 6)
+    MakeStroke(SpeedInput, COLORS.Blue, 1)
+    UI.SpeedInput = SpeedInput
+
+    -- Speed Display (sync dengan input)
+    UI.SpeedDisplay = SpeedInput
+
+    -- Input Logic
+    SpeedInput.FocusLost:Connect(function(enterPressed)
+        if enterPressed then
+            local num = tonumber(SpeedInput.Text)
+            if num then
+                SetSpeed(num)
+            else
+                SpeedInput.Text = SpeedWalk.Speed
+            end
+        end
+    end)
+
+    -- ============================================
+    -- PLUS / MINUS BUTTONS
+    -- ============================================
+    local BtnFrame = Instance.new("Frame", Content)
+    BtnFrame.Size = UDim2.new(1, -16, 0, 34)
+    BtnFrame.Position = UDim2.new(0, 8, 0, 162)
+    BtnFrame.BackgroundTransparency = 1
+
+    -- Minus Button
+    local MinusBtn = Instance.new("TextButton", BtnFrame)
+    MinusBtn.Size = UDim2.new(0.48, -2, 1, 0)
+    MinusBtn.Position = UDim2.new(0, 0, 0, 0)
+    MinusBtn.BackgroundColor3 = COLORS.Surface
+    MinusBtn.Text = "−"
+    MinusBtn.TextColor3 = COLORS.White
+    MinusBtn.TextSize = 24
+    MinusBtn.Font = Enum.Font.GothamBold
+    MinusBtn.BorderSizePixel = 0
+    MakeCorner(MinusBtn, 6)
+    MakeStroke(MinusBtn, COLORS.Blue, 1)
+    UI.MinusBtn = MinusBtn
+
+    -- Plus Button
+    local PlusBtn = Instance.new("TextButton", BtnFrame)
+    PlusBtn.Size = UDim2.new(0.48, -2, 1, 0)
+    PlusBtn.Position = UDim2.new(0.52, 0, 0, 0)
+    PlusBtn.BackgroundColor3 = COLORS.Surface
+    PlusBtn.Text = "+"
+    PlusBtn.TextColor3 = COLORS.White
+    PlusBtn.TextSize = 24
+    PlusBtn.Font = Enum.Font.GothamBold
+    PlusBtn.BorderSizePixel = 0
+    MakeCorner(PlusBtn, 6)
+    MakeStroke(PlusBtn, COLORS.Blue, 1)
+    UI.PlusBtn = PlusBtn
+
+    -- Hover Effects
+    MinusBtn.MouseEnter:Connect(function()
+        MinusBtn.BackgroundColor3 = COLORS.Red
+        MinusBtn.BackgroundTransparency = 0.15
+    end)
+    MinusBtn.MouseLeave:Connect(function()
+        MinusBtn.BackgroundColor3 = COLORS.Surface
+    end)
+
+    PlusBtn.MouseEnter:Connect(function()
+        PlusBtn.BackgroundColor3 = COLORS.Green
+        PlusBtn.BackgroundTransparency = 0.15
+    end)
+    PlusBtn.MouseLeave:Connect(function()
+        PlusBtn.BackgroundColor3 = COLORS.Surface
+    end)
+
+    -- Button Functions
+    MinusBtn.MouseButton1Click:Connect(DecreaseSpeed)
+    PlusBtn.MouseButton1Click:Connect(IncreaseSpeed)
+
+    -- ============================================
+    -- KEYBIND SUPPORT
+    -- ============================================
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        
+        if input.KeyCode == Enum.KeyCode.Left or input.KeyCode == Enum.KeyCode.Down then
+            DecreaseSpeed()
+        elseif input.KeyCode == Enum.KeyCode.Right or input.KeyCode == Enum.KeyCode.Up then
+            IncreaseSpeed()
+        elseif input.KeyCode == Enum.KeyCode.Insert then
+            ToggleBtn.MouseButton1Click:Fire()
+        end
+    end)
+
+    -- ============================================
+    -- TOGGLE BUTTON LOGIC
+    -- ============================================
+    ToggleBtn.MouseButton1Click:Connect(function()
+        ToggleSpeedWalk()
+        UpdateUI()
+    end)
+
+    -- ============================================
+    -- CREDIT
+    -- ============================================
+    local Credit = Instance.new("TextLabel", Content)
+    Credit.Size = UDim2.new(1, 0, 0, 14)
+    Credit.Position = UDim2.new(0, 0, 1, -16)
+    Credit.BackgroundTransparency = 1
+    Credit.Text = "By Kholis  |  ← ↓ -  |  ↑ → +  |  INS toggle"
+    Credit.TextColor3 = COLORS.Gray
+    Credit.Font = Enum.Font.Gotham
+    Credit.TextSize = 8
+    Credit.TextXAlignment = Enum.TextXAlignment.Center
+
+    -- ============================================
+    -- INITIAL UI UPDATE
+    -- ============================================
+    UpdateUI()
+    
+    print(">> SPEED WALK BY KHOLIS LOADED")
+    print(">> Press INSERT to toggle")
+    print(">> Arrow keys to adjust speed (← ↓ - | ↑ → +)")
+    print(">> Type speed number and press Enter")
+end
+
+-- ================================================
+-- START
+-- ================================================
+BuildUI()

@@ -1,0 +1,412 @@
+--!strict
+-- Fling GUI – Modern Blue Theme (Edited by Kholis)
+
+-- // Services
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local AllBool = false
+local FlingPower = 1
+
+-- // Target picker
+local function GetPlayer(query: string?): Player?
+    if not query or query == "" then return nil end
+    local Name = string.lower(query)
+
+    if Name == "all" or Name == "others" then
+        AllBool = true
+        return nil
+    elseif Name == "random" then
+        local candidates = {}
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer then
+                local ch = p.Character
+                local hum = ch and ch:FindFirstChildOfClass("Humanoid")
+                local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
+                if ch and hum and hrp and hum.Health > 0 then
+                    table.insert(candidates, p)
+                end
+            end
+        end
+        if #candidates == 0 then
+            return nil
+        end
+        return candidates[math.random(1, #candidates)]
+    else
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer then
+                local n = string.lower(plr.Name)
+                local d = string.lower(plr.DisplayName)
+                if string.match(n, "^" .. Name) or string.match(d, "^" .. Name) then
+                    return plr
+                end
+            end
+        end
+        return nil
+    end
+end
+
+-- // Fling system
+local function SkidFling(TargetPlayer: Player)
+    if not TargetPlayer then return end
+
+    local Character = LocalPlayer.Character
+    local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+    local RootPart = Humanoid and (Character and Character:FindFirstChild("HumanoidRootPart"))
+
+    local TCharacter = TargetPlayer.Character
+    local THumanoid = TCharacter and TCharacter:FindFirstChildOfClass("Humanoid")
+    local TRootPart = THumanoid and (TCharacter and TCharacter:FindFirstChild("HumanoidRootPart"))
+    local THead = TCharacter and TCharacter:FindFirstChild("Head")
+
+    if not (Character and Humanoid and RootPart and TCharacter) then return end
+    if THumanoid and THumanoid.Sit then return end
+    if not TCharacter:FindFirstChildWhichIsA("BasePart") then return end
+
+    if RootPart.AssemblyLinearVelocity.Magnitude < 50 then
+        getgenv().OldPos = RootPart.CFrame
+    end
+
+    local function FPos(BasePart: BasePart, Pos: CFrame, Ang: CFrame)
+        local cf = CFrame.new(BasePart.Position) * Pos * Ang
+        RootPart.CFrame = cf
+        if Character.PrimaryPart then
+            Character:SetPrimaryPartCFrame(cf)
+        end
+        local v = 9e7 * FlingPower
+        local rv = 9e8 * FlingPower
+        RootPart.AssemblyLinearVelocity = Vector3.new(v, v * 10, v)
+        RootPart.AssemblyAngularVelocity = Vector3.new(rv, rv, rv)
+    end
+
+    local function SFBasePart(BasePart: BasePart)
+        local TimeToWait = 2
+        local StartTime = tick()
+        local Angle = 0
+        repeat
+            if RootPart and THumanoid then
+                Angle += 100
+                FPos(BasePart, CFrame.new(0, 1.5, 0), CFrame.Angles(math.rad(Angle), 0, 0))
+                task.wait()
+                FPos(BasePart, CFrame.new(0, -1.5, 0), CFrame.Angles(math.rad(Angle), 0, 0))
+                task.wait()
+            else break end
+        until not TargetPlayer.Parent or not TargetPlayer.Character or Humanoid.Health <= 0 or tick() > StartTime + TimeToWait
+    end
+
+    getgenv().FPDH = getgenv().FPDH or workspace.FallenPartsDestroyHeight
+    workspace.FallenPartsDestroyHeight = 0/0
+
+    local BV = Instance.new("BodyVelocity")
+    BV.Name = "EpixVel"
+    BV.Parent = RootPart
+    local v = 9e8 * FlingPower
+    BV.Velocity = Vector3.new(v, v, v)
+    BV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+
+    Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+
+    if TRootPart and THead then
+        if (TRootPart.Position - THead.Position).Magnitude > 5 then
+            SFBasePart(THead)
+        else
+            SFBasePart(TRootPart)
+        end
+    elseif TRootPart then
+        SFBasePart(TRootPart)
+    elseif THead then
+        SFBasePart(THead)
+    end
+
+    BV:Destroy()
+    Humanoid:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
+
+    if getgenv().OldPos then
+        repeat
+            local back = getgenv().OldPos * CFrame.new(0, .5, 0)
+            RootPart.CFrame = back
+            if Character.PrimaryPart then
+                Character:SetPrimaryPartCFrame(back)
+            end
+            Humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+            for _, x in ipairs(Character:GetChildren()) do
+                if x:IsA("BasePart") then
+                    x.AssemblyLinearVelocity = Vector3.new()
+                    x.AssemblyAngularVelocity = Vector3.new()
+                end
+            end
+            task.wait()
+        until (RootPart.Position - getgenv().OldPos.Position).Magnitude < 25
+    end
+
+    workspace.FallenPartsDestroyHeight = getgenv().FPDH
+end
+
+-- // GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "FlingGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.IgnoreGuiInset = false
+ScreenGui.Parent = (LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui"))
+
+-- Frame utama
+local Main = Instance.new("Frame")
+Main.Name = "Main"
+Main.Size = UDim2.fromOffset(250, 310)
+Main.Position = UDim2.new(0.5, 0, 0.5, -120)
+Main.AnchorPoint = Vector2.new(0.5, 0)
+Main.BackgroundColor3 = Color3.fromRGB(6, 12, 25)
+Main.BorderSizePixel = 0
+Main.Active = true
+Main.Draggable = true
+Main.Parent = ScreenGui
+
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 16)
+
+local UIGradient = Instance.new("UIGradient", Main)
+UIGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(10, 25, 50)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(4, 8, 18))
+}
+UIGradient.Rotation = 90
+
+-- ============================================
+-- HEADER — LOGO + JUDUL
+-- ============================================
+local Header = Instance.new("Frame", Main)
+Header.Size = UDim2.new(1, 0, 0, 50)
+Header.BackgroundColor3 = Color3.fromRGB(10, 20, 45)
+Header.BorderSizePixel = 0
+Instance.new("UICorner", Header).CornerRadius = UDim.new(0, 16)
+
+-- LOGO
+local Logo = Instance.new("ImageLabel", Header)
+Logo.Size = UDim2.new(0, 28, 0, 28)
+Logo.Position = UDim2.new(0, 10, 0.5, -14)
+Logo.BackgroundTransparency = 1
+Logo.Image = "rbxassetid://133310718357225"
+Logo.ScaleType = Enum.ScaleType.Fit
+Logo.ImageColor3 = Color3.fromRGB(60, 180, 255)
+
+-- JUDUL
+local Title = Instance.new("TextLabel", Header)
+Title.Size = UDim2.new(1, -130, 1, 0)
+Title.Position = UDim2.new(0, 44, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "FLING BY KHOLIS"
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 15
+Title.TextColor3 = Color3.fromRGB(60, 180, 255)
+Title.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Minimize Button
+local MinBtn = Instance.new("TextButton", Header)
+MinBtn.Size = UDim2.new(0, 28, 0, 28)
+MinBtn.Position = UDim2.new(1, -68, 0.5, -14)
+MinBtn.BackgroundColor3 = Color3.fromRGB(20, 40, 70)
+MinBtn.Text = "-"
+MinBtn.Font = Enum.Font.GothamBold
+MinBtn.TextSize = 18
+MinBtn.TextColor3 = Color3.fromRGB(60, 180, 255)
+MinBtn.BorderSizePixel = 0
+Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(1, 0)
+
+-- Close Button
+local CloseBtn = Instance.new("TextButton", Header)
+CloseBtn.Size = UDim2.new(0, 28, 0, 28)
+CloseBtn.Position = UDim2.new(1, -34, 0.5, -14)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(50, 20, 20)
+CloseBtn.Text = "X"
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.TextSize = 14
+CloseBtn.TextColor3 = Color3.fromRGB(255, 180, 180)
+CloseBtn.BorderSizePixel = 0
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(1, 0)
+
+CloseBtn.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
+end)
+
+-- Body
+local Body = Instance.new("Frame", Main)
+Body.Size = UDim2.new(1, -20, 1, -70)
+Body.Position = UDim2.new(0, 10, 0, 56)
+Body.BackgroundTransparency = 1
+
+local UIList = Instance.new("UIListLayout", Body)
+UIList.Padding = UDim.new(0, 6)
+UIList.FillDirection = Enum.FillDirection.Vertical
+UIList.SortOrder = Enum.SortOrder.LayoutOrder
+
+-- ============================================
+-- REUSABLE BUTTON — IKON BERBEDA
+-- ============================================
+local function MakeBtn(text, icon)
+    local Btn = Instance.new("TextButton", Body)
+    Btn.Size = UDim2.new(1, 0, 0, 36)
+    Btn.Text = icon .. " " .. text
+    Btn.Font = Enum.Font.GothamBold
+    Btn.TextSize = 13
+    Btn.TextColor3 = Color3.fromRGB(200, 220, 255)
+    Btn.BackgroundColor3 = Color3.fromRGB(16, 30, 60)
+    Btn.BorderSizePixel = 0
+    Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 10)
+
+    Btn.MouseEnter:Connect(function()
+        Btn.BackgroundColor3 = Color3.fromRGB(30, 60, 110)
+    end)
+    Btn.MouseLeave:Connect(function()
+        Btn.BackgroundColor3 = Color3.fromRGB(16, 30, 60)
+    end)
+
+    return Btn
+end
+
+-- ============================================
+-- IKON YANG BERBEDA
+-- ============================================
+-- TargetBox
+local TargetBox = Instance.new("TextBox", Body)
+TargetBox.Size = UDim2.new(1, 0, 0, 36)
+TargetBox.PlaceholderText = "🎯 Nama target / all / others / random"
+TargetBox.Text = ""
+TargetBox.ClearTextOnFocus = false
+TargetBox.Font = Enum.Font.Gotham
+TargetBox.TextSize = 12
+TargetBox.TextColor3 = Color3.fromRGB(200, 220, 255)
+TargetBox.PlaceholderColor3 = Color3.fromRGB(100, 140, 190)
+TargetBox.BackgroundColor3 = Color3.fromRGB(12, 22, 45)
+TargetBox.BorderSizePixel = 0
+Instance.new("UICorner", TargetBox).CornerRadius = UDim.new(0, 10)
+
+-- ============================================
+-- BUTTON DENGAN IKON BERBEDA
+-- ============================================
+local BtnFlingTarget = MakeBtn("Fling Target", "⚡")      -- Petir
+local BtnFlingRandom = MakeBtn("Auto Random", "🎲")      -- Dadu
+local BtnFlingOthers = MakeBtn("Fling Others", "🌊")     -- Ombak
+local BtnTouchFling = MakeBtn("Touch Fling", "🤚")       -- Tangan
+local BtnAntiFling = MakeBtn("Anti Fling", "🛡️")        -- Perisai
+
+-- ============================================
+-- IKON BUTTON ALTERNATIF (jika ingin ganti)
+-- ============================================
+-- 🔥 Api
+-- ⚡ Petir
+-- 🎲 Dadu
+-- 🌊 Ombak
+-- 🤚 Tangan
+-- 🛡️ Perisai
+-- ⚔️ Pedang
+-- 🔮 Kristal
+-- 🌪️ Angin
+-- 💥 Ledakan
+-- 🌀 Pusaran
+-- 🚀 Roket
+
+-- Minimize toggle
+local Minimized = false
+MinBtn.MouseButton1Click:Connect(function()
+    Minimized = not Minimized
+    if Minimized then
+        Body.Visible = false
+        Main.Size = UDim2.fromOffset(250, 50)
+        MinBtn.Text = "+"
+    else
+        Body.Visible = true
+        Main.Size = UDim2.fromOffset(250, 310)
+        MinBtn.Text = "-"
+    end
+end)
+
+-- === Interactions ===
+BtnFlingTarget.MouseButton1Click:Connect(function()
+    AllBool = false
+    local q = TargetBox.Text
+    local tp = GetPlayer(q)
+    if AllBool then
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer then
+                task.spawn(SkidFling, p)
+            end
+        end
+    else
+        if tp and tp ~= LocalPlayer then
+            task.spawn(SkidFling, tp)
+        end
+    end
+end)
+
+local AutoRandom = false
+BtnFlingRandom.MouseButton1Click:Connect(function()
+    AutoRandom = not AutoRandom
+    BtnFlingRandom.Text = AutoRandom and "🎲 Auto Random: ON" or "🎲 Auto Random: OFF"
+    if AutoRandom then
+        task.spawn(function()
+            while AutoRandom do
+                local tp = GetPlayer("random")
+                if tp then
+                    task.spawn(SkidFling, tp)
+                end
+                task.wait(3)
+            end
+        end)
+    end
+end)
+
+BtnFlingOthers.MouseButton1Click:Connect(function()
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            task.spawn(SkidFling, p)
+        end
+    end
+end)
+
+-- Touch fling
+local hiddenfling = false
+local flingThread
+local function TouchFling()
+    local lp = Players.LocalPlayer
+    local c, hrp, vel, movel = nil, nil, nil, 0.1
+    while hiddenfling do
+        RunService.Heartbeat:Wait()
+        c = lp.Character
+        hrp = c and c:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            vel = hrp.Velocity
+            hrp.Velocity = vel * 10000 + Vector3.new(0, 10000, 0)
+            RunService.RenderStepped:Wait()
+            hrp.Velocity = vel
+            RunService.Stepped:Wait()
+            hrp.Velocity = vel + Vector3.new(0, movel, 0)
+            movel = -movel
+        end
+    end
+end
+
+BtnTouchFling.MouseButton1Click:Connect(function()
+    hiddenfling = not hiddenfling
+    BtnTouchFling.Text = hiddenfling and "🤚 Touch Fling: ON" or "🤚 Touch Fling: OFF"
+    BtnTouchFling.BackgroundColor3 = hiddenfling and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(16, 30, 60)
+    if hiddenfling then
+        flingThread = coroutine.create(TouchFling)
+        coroutine.resume(flingThread)
+    end
+end)
+
+-- Anti fling
+local AntiFling = false
+BtnAntiFling.MouseButton1Click:Connect(function()
+    AntiFling = not AntiFling
+    if AntiFling then
+        workspace.Gravity = 0
+        BtnAntiFling.Text = "🛡️ Anti Fling: ON"
+        BtnAntiFling.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+    else
+        workspace.Gravity = 196.2
+        BtnAntiFling.Text = "🛡️ Anti Fling: OFF"
+        BtnAntiFling.BackgroundColor3 = Color3.fromRGB(16, 30, 60)
+    end
+end)

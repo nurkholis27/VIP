@@ -1,0 +1,426 @@
+-- ================================================
+-- INFINITY JUMP BY KHOLIS v1.0
+-- Owner: Mr. Kholis
+-- Fitur: Infinite Jump + GUI ON/OFF
+-- ================================================
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- ================================================
+-- STATE
+-- ================================================
+local InfinityJump = {
+    Enabled = false,
+    JumpPower = 50,
+    OriginalJumpPower = 50,
+    Connection = nil,
+    GUI = nil
+}
+
+-- ================================================
+-- WARNA BIRU MUDA
+-- ================================================
+local COLORS = {
+    Bg = Color3.fromRGB(6, 12, 24),
+    Panel = Color3.fromRGB(12, 20, 40),
+    Surface = Color3.fromRGB(18, 28, 50),
+    Text = Color3.fromRGB(245, 245, 255),
+    TextDim = Color3.fromRGB(150, 180, 220),
+    Blue = Color3.fromRGB(60, 180, 255),
+    BlueLight = Color3.fromRGB(100, 200, 255),
+    BlueDark = Color3.fromRGB(30, 80, 150),
+    White = Color3.fromRGB(255, 255, 255),
+    Gray = Color3.fromRGB(100, 120, 150),
+    Green = Color3.fromRGB(0, 255, 150),
+    Red = Color3.fromRGB(255, 60, 80)
+}
+
+-- ================================================
+-- UI HELPERS
+-- ================================================
+local function MakeCorner(obj, radius)
+    local c = Instance.new("UICorner", obj)
+    c.CornerRadius = UDim.new(0, radius or 8)
+    return c
+end
+
+local function MakeStroke(obj, color, thickness)
+    local s = Instance.new("UIStroke", obj)
+    s.Color = color or COLORS.Blue
+    s.Thickness = thickness or 1.5
+    s.Transparency = 0.4
+    s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    return s
+end
+
+local function MakeDraggable(frame)
+    local dragging, dragStart, startPos
+    frame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
+        end
+    end)
+    frame.InputChanged:Connect(function(input)
+        if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and dragging then
+            local delta = input.Position - dragStart
+            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+end
+
+-- ================================================
+-- INFINITY JUMP ENGINE
+-- ================================================
+local function EnableInfinityJump()
+    if InfinityJump.Enabled then return end
+    
+    local character = LocalPlayer.Character
+    if not character then return end
+    
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+    
+    -- Simpan jump power asli
+    InfinityJump.OriginalJumpPower = humanoid.JumpPower
+    
+    -- Set jump power lebih tinggi
+    humanoid.JumpPower = InfinityJump.JumpPower
+    
+    InfinityJump.Enabled = true
+    
+    -- Hook JumpRequest
+    InfinityJump.Connection = UserInputService.JumpRequest:Connect(function()
+        if not InfinityJump.Enabled then return end
+        
+        local char = LocalPlayer.Character
+        if not char then return end
+        
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum then return end
+        
+        -- Cek apakah sedang di tanah atau di udara
+        if hum:GetState() == Enum.HumanoidStateType.Landed or 
+           hum:GetState() == Enum.HumanoidStateType.Running or
+           hum:GetState() == Enum.HumanoidStateType.Jumping or
+           hum:GetState() == Enum.HumanoidStateType.Freefall then
+            hum:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+    end)
+    
+    print("[INFINITY] Enabled")
+end
+
+local function DisableInfinityJump()
+    if not InfinityJump.Enabled then return end
+    
+    InfinityJump.Enabled = false
+    
+    if InfinityJump.Connection then
+        InfinityJump.Connection:Disconnect()
+        InfinityJump.Connection = nil
+    end
+    
+    -- Restore jump power
+    local character = LocalPlayer.Character
+    if character then
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.JumpPower = InfinityJump.OriginalJumpPower
+        end
+    end
+    
+    print("[INFINITY] Disabled")
+end
+
+local function ToggleInfinityJump()
+    if InfinityJump.Enabled then
+        DisableInfinityJump()
+    else
+        EnableInfinityJump()
+    end
+end
+
+-- ================================================
+-- RESPAWN HANDLER
+-- ================================================
+LocalPlayer.CharacterAdded:Connect(function(newChar)
+    if InfinityJump.Enabled then
+        -- Tunggu karakter siap
+        task.wait(0.5)
+        local humanoid = newChar:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.JumpPower = InfinityJump.JumpPower
+        end
+        print("[INFINITY] Reapplied on respawn")
+    end
+end)
+
+-- ================================================
+-- BUILD UI
+-- ================================================
+local function BuildUI()
+    if CoreGui:FindFirstChild("InfinityJumpUI") then CoreGui.InfinityJumpUI:Destroy() end
+    
+    local Screen = Instance.new("ScreenGui", CoreGui)
+    Screen.Name = "InfinityJumpUI"
+    Screen.ResetOnSpawn = false
+    
+    -- ============================================
+    -- MAIN FRAME
+    -- ============================================
+    local Main = Instance.new("Frame", Screen)
+    Main.Size = UDim2.new(0, 260, 0, 180)
+    Main.Position = UDim2.new(0.5, -130, 0.5, -90)
+    Main.BackgroundColor3 = COLORS.Bg
+    Main.BorderSizePixel = 0
+    Main.Active = true
+    Main.Draggable = true
+    Main.ClipsDescendants = true
+    MakeCorner(Main, 12)
+    MakeStroke(Main, COLORS.Blue, 2)
+    MakeDraggable(Main)
+
+    -- ============================================
+    -- HEADER
+    -- ============================================
+    local Header = Instance.new("Frame", Main)
+    Header.Size = UDim2.new(1, 0, 0, 38)
+    Header.BackgroundColor3 = COLORS.Panel
+    Header.BorderSizePixel = 0
+    MakeCorner(Header, 12)
+
+    -- Title — "INFINITY BY KHOLIS"
+    local Title = Instance.new("TextLabel", Header)
+    Title.Size = UDim2.new(1, -70, 1, 0)
+    Title.Position = UDim2.new(0, 10, 0, 0)
+    Title.BackgroundTransparency = 1
+    Title.Text = "∞ INFINITY BY KHOLIS"
+    Title.Font = Enum.Font.GothamBold
+    Title.TextSize = 12
+    Title.TextColor3 = COLORS.BlueLight
+    Title.TextXAlignment = Enum.TextXAlignment.Left
+
+    -- Close Button
+    local CloseBtn = Instance.new("TextButton", Header)
+    CloseBtn.Size = UDim2.new(0, 24, 0, 24)
+    CloseBtn.Position = UDim2.new(1, -30, 0.5, -12)
+    CloseBtn.BackgroundColor3 = COLORS.Red
+    CloseBtn.BackgroundTransparency = 0.2
+    CloseBtn.Text = "✕"
+    CloseBtn.TextColor3 = COLORS.White
+    CloseBtn.TextSize = 12
+    CloseBtn.Font = Enum.Font.GothamBold
+    CloseBtn.BorderSizePixel = 0
+    MakeCorner(CloseBtn, 6)
+
+    CloseBtn.MouseButton1Click:Connect(function() 
+        DisableInfinityJump()
+        Screen:Destroy() 
+    end)
+
+    -- Minimize Button
+    local MinBtn = Instance.new("TextButton", Header)
+    MinBtn.Size = UDim2.new(0, 24, 0, 24)
+    MinBtn.Position = UDim2.new(1, -58, 0.5, -12)
+    MinBtn.BackgroundColor3 = COLORS.Surface
+    MinBtn.Text = "−"
+    MinBtn.TextColor3 = COLORS.White
+    MinBtn.TextSize = 16
+    MinBtn.Font = Enum.Font.GothamBold
+    MinBtn.BorderSizePixel = 0
+    MakeCorner(MinBtn, 6)
+
+    local Expanded = true
+    MinBtn.MouseButton1Click:Connect(function()
+        Expanded = not Expanded
+        Main:TweenSize(Expanded and UDim2.new(0, 260, 0, 180) or UDim2.new(0, 260, 0, 38), "Out", "Quad", 0.3)
+    end)
+
+    -- ============================================
+    -- CONTENT
+    -- ============================================
+    local Content = Instance.new("Frame", Main)
+    Content.Size = UDim2.new(1, 0, 1, -38)
+    Content.Position = UDim2.new(0, 0, 0, 38)
+    Content.BackgroundTransparency = 1
+
+    -- Status Display
+    local StatusFrame = Instance.new("Frame", Content)
+    StatusFrame.Size = UDim2.new(1, -16, 0, 44)
+    StatusFrame.Position = UDim2.new(0, 8, 0, 10)
+    StatusFrame.BackgroundColor3 = COLORS.Panel
+    MakeCorner(StatusFrame, 6)
+    MakeStroke(StatusFrame, COLORS.Blue, 1)
+
+    local StatusTxt = Instance.new("TextLabel", StatusFrame)
+    StatusTxt.Size = UDim2.new(1, -10, 1, 0)
+    StatusTxt.Position = UDim2.new(0, 5, 0, 0)
+    StatusTxt.BackgroundTransparency = 1
+    StatusTxt.Text = "STATUS: OFF"
+    StatusTxt.TextColor3 = COLORS.TextDim
+    StatusTxt.Font = Enum.Font.GothamBold
+    StatusTxt.TextSize = 13
+    StatusTxt.TextXAlignment = Enum.TextXAlignment.Center
+
+    -- Toggle Button
+    local ToggleBtn = Instance.new("TextButton", Content)
+    ToggleBtn.Size = UDim2.new(1, -16, 0, 40)
+    ToggleBtn.Position = UDim2.new(0, 8, 0, 62)
+    ToggleBtn.BackgroundColor3 = COLORS.Blue
+    ToggleBtn.Text = "🔓 ENABLE"
+    ToggleBtn.TextColor3 = COLORS.White
+    ToggleBtn.Font = Enum.Font.GothamBold
+    ToggleBtn.TextSize = 14
+    MakeCorner(ToggleBtn, 6)
+
+    -- Jump Power Slider
+    local SliderLabel = Instance.new("TextLabel", Content)
+    SliderLabel.Size = UDim2.new(1, -16, 0, 16)
+    SliderLabel.Position = UDim2.new(0, 8, 0, 110)
+    SliderLabel.BackgroundTransparency = 1
+    SliderLabel.Text = "JUMP POWER: 50"
+    SliderLabel.TextColor3 = COLORS.TextDim
+    SliderLabel.Font = Enum.Font.Gotham
+    SliderLabel.TextSize = 10
+    SliderLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+    -- Slider Background
+    local SliderBg = Instance.new("Frame", Content)
+    SliderBg.Size = UDim2.new(1, -16, 0, 4)
+    SliderBg.Position = UDim2.new(0, 8, 0, 130)
+    SliderBg.BackgroundColor3 = COLORS.Surface
+    SliderBg.BorderSizePixel = 0
+    MakeCorner(SliderBg, 2)
+
+    -- Slider Fill
+    local SliderFill = Instance.new("Frame", SliderBg)
+    SliderFill.Size = UDim2.new(0.25, 0, 1, 0)
+    SliderFill.BackgroundColor3 = COLORS.Blue
+    SliderFill.BorderSizePixel = 0
+    MakeCorner(SliderFill, 2)
+
+    -- Slider Knob
+    local SliderKnob = Instance.new("Frame", SliderBg)
+    SliderKnob.Size = UDim2.new(0, 14, 0, 14)
+    SliderKnob.AnchorPoint = Vector2.new(0.5, 0.5)
+    SliderKnob.Position = UDim2.new(0.25, 0, 0.5, 0)
+    SliderKnob.BackgroundColor3 = COLORS.White
+    SliderKnob.BorderSizePixel = 0
+    MakeCorner(SliderKnob, 7)
+
+    -- Credit
+    local Credit = Instance.new("TextLabel", Content)
+    Credit.Size = UDim2.new(1, 0, 0, 14)
+    Credit.Position = UDim2.new(0, 0, 1, -16)
+    Credit.BackgroundTransparency = 1
+    Credit.Text = "By Kholis"
+    Credit.TextColor3 = COLORS.Gray
+    Credit.Font = Enum.Font.Gotham
+    Credit.TextSize = 8
+    Credit.TextXAlignment = Enum.TextXAlignment.Center
+
+    -- ============================================
+    -- SLIDER LOGIC
+    -- ============================================
+    local isDragging = false
+    
+    local function UpdateSlider(value)
+        local percent = math.clamp(value, 0, 1)
+        local jumpPower = 10 + percent * 90 -- 10 - 100
+        InfinityJump.JumpPower = jumpPower
+        
+        SliderLabel.Text = "JUMP POWER: " .. math.floor(jumpPower)
+        SliderFill.Size = UDim2.new(percent, 0, 1, 0)
+        SliderKnob.Position = UDim2.new(percent, 0, 0.5, 0)
+        
+        -- Update jika sedang aktif
+        if InfinityJump.Enabled then
+            local char = LocalPlayer.Character
+            if char then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum then
+                    hum.JumpPower = jumpPower
+                end
+            end
+        end
+    end
+    
+    local function OnSliderInput(input)
+        local percent = math.clamp((input.Position.X - SliderBg.AbsolutePosition.X) / SliderBg.AbsoluteSize.X, 0, 1)
+        UpdateSlider(percent)
+    end
+    
+    SliderBg.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            isDragging = true
+            OnSliderInput(input)
+        end
+    end)
+    
+    SliderKnob.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            isDragging = true
+            OnSliderInput(input)
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if isDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            OnSliderInput(input)
+        end
+    end)
+    
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            isDragging = false
+        end
+    end)
+    
+    -- ============================================
+    -- TOGGLE BUTTON LOGIC
+    -- ============================================
+    ToggleBtn.MouseButton1Click:Connect(function()
+        ToggleInfinityJump()
+        
+        if InfinityJump.Enabled then
+            ToggleBtn.Text = "🔒 DISABLE"
+            ToggleBtn.BackgroundColor3 = COLORS.Green
+            StatusTxt.Text = "STATUS: ON"
+            StatusTxt.TextColor3 = COLORS.Green
+        else
+            ToggleBtn.Text = "🔓 ENABLE"
+            ToggleBtn.BackgroundColor3 = COLORS.Blue
+            StatusTxt.Text = "STATUS: OFF"
+            StatusTxt.TextColor3 = COLORS.TextDim
+        end
+    end)
+    
+    -- ============================================
+    -- KEYBIND: INSERT TO TOGGLE
+    -- ============================================
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        
+        if input.KeyCode == Enum.KeyCode.Insert then
+            ToggleBtn.MouseButton1Click:Fire()
+        end
+    end)
+    
+    print(">> INFINITY JUMP BY KHOLIS LOADED")
+    print(">> Press INSERT to toggle")
+end
+
+-- ================================================
+-- START
+-- ================================================
+BuildUI()
